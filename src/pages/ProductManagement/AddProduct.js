@@ -2,11 +2,14 @@ import { useState } from "react";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  Package, DollarSign, Image as ImageIcon, Tag, Info, Check,
+  X, Plus, Trash2, Globe, Shield
+} from "react-feather";
+import { Button, Card, Input, Alert, Badge } from "../../components/ui";
+import { toast } from "react-toastify";
 
-/**
- * Product types available for selection
- * These categories help organize products for better browsing experience
- */
 const productTypes = [
   'Notebooks and Journals',
   'Pens and Pencils',
@@ -20,35 +23,18 @@ const productTypes = [
   'Gift Wrap and Packaging',
 ];
 
-/**
- * Brands available for selection
- * Maintaining a consistent brand list ensures data integrity
- */
 const brands = [
-  'Camel',
-  'Faber-Castell',
-  'Staedtler',
-  'Doms',
-  'Camlin',
-  'Luxor',
-  'Monami',
-  'Schneider',
-  'Pentel',
-  'Pilot',
-  'Kokuyo',
-  'Nataraj',
-  'OHPen',
-  'Bic',
-  'Zebra',
-  'Stabilo',
+  'Camel', 'Faber-Castell', 'Staedtler', 'Doms', 'Camlin', 'Luxor',
+  'Monami', 'Schneider', 'Pentel', 'Pilot', 'Kokuyo', 'Nataraj',
+  'OHPen', 'Bic', 'Zebra', 'Stabilo',
 ];
 
 /**
- * AddProduct Component
- * Allows administrators to add new products to the inventory
- * Enhanced with additional features for comprehensive product information
+ * Enhanced Add Product Page with Modern UI
  */
 const AddProduct = () => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('basic');
   const [newProduct, setNewProduct] = useState({
     name: "",
     description: "",
@@ -69,118 +55,122 @@ const AddProduct = () => {
     warranty: { available: false, period: "", details: "" },
     guarantee: { available: false, period: "", details: "" },
     importDetails: { isImported: false, country: "", deliveryNote: "" },
+    specifications: [],
+    features: []
   });
-  
+
   const [tagInput, setTagInput] = useState("");
+  const [featureInput, setFeatureInput] = useState("");
+  const [specKey, setSpecKey] = useState("");
+  const [specValue, setSpecValue] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionStatus, setSubmissionStatus] = useState(null);
   const [slugAvailability, setSlugAvailability] = useState({ checked: false, available: false });
-  const navigate = useNavigate();
+  const [errors, setErrors] = useState({});
+
+  const tabs = [
+    { id: 'basic', label: 'Basic Info', icon: Package },
+    { id: 'pricing', label: 'Pricing', icon: DollarSign },
+    { id: 'images', label: 'Images', icon: ImageIcon },
+    { id: 'details', label: 'Details', icon: Info },
+    { id: 'warranty', label: 'Warranty', icon: Shield }
+  ];
 
   /**
-   * Handle product submission to database
-   * Includes validation and feedback on submission status
+   * Validate form
+   */
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!newProduct.name) newErrors.name = "Product name is required";
+    if (!newProduct.sellingPrice) newErrors.sellingPrice = "Selling price is required";
+    if (!newProduct.slug) newErrors.slug = "URL slug is required";
+    if (!slugAvailability.available) newErrors.slug = "Please check slug availability";
+    if (!newProduct.image) newErrors.image = "At least one image is required";
+    if (!newProduct.stock || newProduct.stock < 0) newErrors.stock = "Valid stock quantity is required";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  /**
+   * Check slug availability
+   */
+  const checkSlugAvailability = async () => {
+    if (!newProduct.slug) {
+      toast.error("Please enter a URL slug");
+      return;
+    }
+
+    try {
+      const formattedSlug = newProduct.slug.toLowerCase().trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]/g, '');
+
+      setNewProduct({ ...newProduct, slug: formattedSlug });
+
+      const docRef = doc(db, "products", formattedSlug);
+      const docSnap = await getDoc(docRef);
+
+      setSlugAvailability({
+        checked: true,
+        available: !docSnap.exists()
+      });
+
+      if (!docSnap.exists()) {
+        toast.success("URL slug is available!");
+      } else {
+        toast.error("This URL slug is already taken");
+      }
+    } catch (error) {
+      console.error("Error checking slug:", error);
+      toast.error("Failed to check slug availability");
+    }
+  };
+
+  /**
+   * Handle product submission
    */
   const handleAddProduct = async () => {
-    // Validation checks
-    if (!newProduct.name || !newProduct.price) {
-      alert("Product name and price are required!");
-      return;
-    }
-
-    if (!newProduct.slug) {
-      alert("Product URL slug is required!");
-      return;
-    }
-
-    if (!slugAvailability.checked || !slugAvailability.available) {
-      alert("Please check if the URL slug is available and valid!");
+    if (!validateForm()) {
+      toast.error("Please fill in all required fields");
       return;
     }
 
     try {
       setIsSubmitting(true);
-      setSubmissionStatus("submitting");
 
-      // Format slug one more time to ensure it's URL-friendly
       const formattedSlug = newProduct.slug.toLowerCase().trim()
         .replace(/\s+/g, '-')
         .replace(/[^\w-]/g, '');
 
-      // Sync price fields and remove slug from the object (it will be the document ID)
       const { slug, ...productToSave } = {
         ...newProduct,
-        slug: formattedSlug, // Keep a copy in the document for reference
+        slug: formattedSlug,
         sellingPrice: Number(newProduct.sellingPrice || newProduct.price),
         mrp: Number(newProduct.mrp || newProduct.price),
         price: Number(newProduct.sellingPrice || newProduct.price),
         stock: Number(newProduct.stock),
-        createdAt: new Date()
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
 
-      // Use setDoc with a specific document ID (the slug) instead of addDoc
       const productRef = doc(db, "products", formattedSlug);
       await setDoc(productRef, productToSave);
-      
-      setSubmissionStatus("success");
-      
-      // Reset status after a delay and navigate back
+
+      toast.success("Product added successfully!");
       setTimeout(() => {
-        setIsSubmitting(false);
-        setSubmissionStatus(null);
         navigate("/products");
-      }, 2000);
+      }, 1500);
     } catch (error) {
       console.error("Error adding product:", error);
-      setSubmissionStatus("error");
+      toast.error("Failed to add product");
+    } finally {
       setIsSubmitting(false);
     }
   };
 
   /**
-   * Handle image URL changes
-   * @param {Event} e - Input change event
-   * @param {String} key - Image field key (image, image2, image3)
-   */
-  const handleImageChange = (e, key) => {
-    setNewProduct({ ...newProduct, [key]: e.target.value });
-  };
-
-  /**
-   * Check if URL slug is available
-   * Ensures unique product IDs
-   */
-  const checkSlugAvailability = async () => {
-    if (!newProduct.slug) {
-      setSlugAvailability({ checked: false, available: false });
-      return;
-    }
-    
-    try {
-      // Format the slug to be URL-friendly (lowercase, replace spaces with hyphens)
-      const formattedSlug = newProduct.slug.toLowerCase().trim()
-        .replace(/\s+/g, '-')
-        .replace(/[^\w-]/g, '');
-      
-      // Update the product's slug with the formatted version
-      setNewProduct({ ...newProduct, slug: formattedSlug });
-      
-      // Check if this slug already exists as a document ID
-      const docRef = doc(db, "products", formattedSlug);
-      const docSnap = await getDoc(docRef);
-      
-      setSlugAvailability({ 
-        checked: true, 
-        available: !docSnap.exists() 
-      });
-    } catch (error) {
-      console.error("Error checking slug availability:", error);
-      setSlugAvailability({ checked: true, available: false });
-    }
-  };
-
-  /**
-   * Add a new tag to the product
+   * Add tag
    */
   const addTag = () => {
     if (tagInput.trim() && !newProduct.tags.includes(tagInput.trim())) {
@@ -193,7 +183,7 @@ const AddProduct = () => {
   };
 
   /**
-   * Remove a tag from the product
+   * Remove tag
    */
   const removeTag = (tagToRemove) => {
     setNewProduct({
@@ -202,446 +192,694 @@ const AddProduct = () => {
     });
   };
 
+  /**
+   * Add feature
+   */
+  const addFeature = () => {
+    if (featureInput.trim()) {
+      setNewProduct({
+        ...newProduct,
+        features: [...newProduct.features, featureInput.trim()]
+      });
+      setFeatureInput("");
+    }
+  };
+
+  /**
+   * Remove feature
+   */
+  const removeFeature = (index) => {
+    setNewProduct({
+      ...newProduct,
+      features: newProduct.features.filter((_, i) => i !== index)
+    });
+  };
+
+  /**
+   * Add specification
+   */
+  const addSpecification = () => {
+    if (specKey.trim() && specValue.trim()) {
+      setNewProduct({
+        ...newProduct,
+        specifications: [...newProduct.specifications, { key: specKey.trim(), value: specValue.trim() }]
+      });
+      setSpecKey("");
+      setSpecValue("");
+    }
+  };
+
+  /**
+   * Remove specification
+   */
+  const removeSpecification = (index) => {
+    setNewProduct({
+      ...newProduct,
+      specifications: newProduct.specifications.filter((_, i) => i !== index)
+    });
+  };
+
+  /**
+   * Calculate discount percentage
+   */
+  const discountPercentage = () => {
+    const mrp = Number(newProduct.mrp);
+    const selling = Number(newProduct.sellingPrice);
+    if (mrp > selling && selling > 0) {
+      return Math.round(((mrp - selling) / mrp) * 100);
+    }
+    return 0;
+  };
+
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6 text-center">Add New Product</h1>
-      <div className="bg-white shadow-lg rounded-lg p-6 mb-6">
-        {/* Basic Information Section */}
-        <h2 className="text-xl font-semibold mb-4 border-b pb-2">Basic Information</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Product Name *</label>
-            <input
-              className="border border-gray-300 p-2 mb-4 w-full rounded"
-              placeholder="Product Name"
-              value={newProduct.name}
-              onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-              required
-            />
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Brand</label>
-            <select
-              className="border border-gray-300 p-2 mb-4 w-full rounded"
-              value={newProduct.brand}
-              onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })}
-            >
-              <option value="">Select Brand</option>
-              {brands.map((brand) => (
-                <option key={brand} value={brand}>{brand}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Product Type</label>
-            <select
-              className="border border-gray-300 p-2 mb-4 w-full rounded"
-              value={newProduct.type}
-              onChange={(e) => setNewProduct({ ...newProduct, type: e.target.value })}
-            >
-              <option value="">Select Type</option>
-              {productTypes.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Stock *</label>
-            <input
-              type="number"
-              className="border border-gray-300 p-2 mb-4 w-full rounded"
-              placeholder="Stock"
-              value={newProduct.stock}
-              onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
-              required
-            />
-          </div>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="max-w-6xl mx-auto space-y-6"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Add New Product</h1>
+          <p className="text-gray-600 mt-1">Create a new product listing for your store</p>
         </div>
+        <Button
+          variant="ghost"
+          onClick={() => navigate("/products")}
+          icon={<X className="w-4 h-4" />}
+        >
+          Cancel
+        </Button>
+      </div>
 
-        {/* Product URL Section */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Product URL (Required)</h2>
-          <div className="flex items-end gap-2 mb-2">
-            <div className="flex-grow">
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Product URL Slug *
-                <span className="ml-1 text-red-500">Required - Will be used as product ID</span>
-              </label>
-              <div className="flex items-center">
-                <span className="bg-gray-100 p-2 border border-r-0 rounded-l">website.com/product/</span>
-                <input
-                  className={`border p-2 flex-grow rounded-r ${
-                    slugAvailability.checked 
-                      ? slugAvailability.available ? 'border-green-500' : 'border-red-500' 
-                      : ''
-                  }`}
-                  placeholder="your-product-name"
-                  value={newProduct.slug}
-                  onChange={(e) => setNewProduct({ ...newProduct, slug: e.target.value })}
-                  required
+      {/* Progress Indicator */}
+      <Card>
+        <div className="flex gap-2 overflow-x-auto">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <motion.button
+                key={tab.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </motion.button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Basic Info Tab */}
+      {activeTab === 'basic' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <Card title="Basic Information" icon={<Package className="w-5 h-5 text-blue-600" />}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input
+                label="Product Name"
+                placeholder="Enter product name"
+                value={newProduct.name}
+                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                error={errors.name}
+                required
+              />
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Brand
+                </label>
+                <select
+                  value={newProduct.brand}
+                  onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Brand</option>
+                  {brands.map((brand) => (
+                    <option key={brand} value={brand}>{brand}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Category
+                </label>
+                <select
+                  value={newProduct.type}
+                  onChange={(e) => setNewProduct({ ...newProduct, type: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Category</option>
+                  {productTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <Input
+                label="Stock Quantity"
+                type="number"
+                placeholder="Available stock"
+                value={newProduct.stock}
+                onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
+                error={errors.stock}
+                required
+              />
+
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Product Description <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={newProduct.description}
+                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                  rows="4"
+                  placeholder="Detailed description of the product..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <p className="text-sm text-gray-500 mt-1">
-                URL slug must be unique and will be used as the product's identifier.
-              </p>
             </div>
-            <button
-              className="bg-blue-500 text-white p-2 rounded ml-2"
-              onClick={checkSlugAvailability}
-            >
-              Check Availability
-            </button>
-          </div>
-          {slugAvailability.checked && (
-            <p className={slugAvailability.available ? 'text-green-500' : 'text-red-500'}>
-              {slugAvailability.available 
-                ? 'URL is available!' 
-                : 'URL is already taken or invalid. Please try another one.'}
-            </p>
-          )}
-        </div>
+          </Card>
 
-        {/* Pricing Section */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Pricing</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">MRP (₹)</label>
-              <input
+          {/* URL Slug */}
+          <Card title="Product URL" icon={<Globe className="w-5 h-5 text-purple-600" />}>
+            <Alert
+              variant="info"
+              message="The URL slug will be used as the product's unique identifier and web address"
+            />
+            <div className="mt-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                URL Slug <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <div className="flex items-center">
+                    <span className="bg-gray-100 px-4 py-2 border border-r-0 rounded-l-lg text-gray-600">
+                      /product/
+                    </span>
+                    <input
+                      type="text"
+                      value={newProduct.slug}
+                      onChange={(e) => {
+                        setNewProduct({ ...newProduct, slug: e.target.value });
+                        setSlugAvailability({ checked: false, available: false });
+                      }}
+                      placeholder="product-url-slug"
+                      className={`flex-1 px-4 py-2 border rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        slugAvailability.checked
+                          ? slugAvailability.available
+                            ? 'border-green-500'
+                            : 'border-red-500'
+                          : 'border-l-0'
+                      }`}
+                    />
+                  </div>
+                  {errors.slug && <p className="text-red-500 text-sm mt-1">{errors.slug}</p>}
+                  {slugAvailability.checked && (
+                    <p className={`text-sm mt-1 ${slugAvailability.available ? 'text-green-600' : 'text-red-600'}`}>
+                      {slugAvailability.available ? '✓ URL is available!' : '✗ URL is already taken'}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  onClick={checkSlugAvailability}
+                  variant="outline"
+                  disabled={!newProduct.slug}
+                >
+                  Check
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          <div className="flex justify-end">
+            <Button onClick={() => setActiveTab('pricing')} icon={<DollarSign className="w-4 h-4" />} iconPosition="right">
+              Next: Pricing
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Pricing Tab */}
+      {activeTab === 'pricing' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <Card title="Pricing Information" icon={<DollarSign className="w-5 h-5 text-green-600" />}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input
+                label="MRP (Maximum Retail Price)"
                 type="number"
-                className="border border-gray-300 p-2 mb-4 w-full rounded"
-                placeholder="MRP Price"
+                placeholder="₹ 0.00"
                 value={newProduct.mrp}
                 onChange={(e) => setNewProduct({ ...newProduct, mrp: e.target.value })}
+                icon={<DollarSign className="w-4 h-4" />}
               />
-            </div>
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">Selling Price (₹) *</label>
-              <input
+
+              <Input
+                label="Selling Price"
                 type="number"
-                className="border border-gray-300 p-2 mb-4 w-full rounded"
-                placeholder="Selling Price"
+                placeholder="₹ 0.00"
                 value={newProduct.sellingPrice}
-                onChange={(e) => setNewProduct({ 
-                  ...newProduct, 
+                onChange={(e) => setNewProduct({
+                  ...newProduct,
                   sellingPrice: e.target.value,
                   price: e.target.value
                 })}
+                icon={<DollarSign className="w-4 h-4" />}
+                error={errors.sellingPrice}
                 required
               />
-              {Number(newProduct.mrp) > Number(newProduct.sellingPrice) && Number(newProduct.sellingPrice) > 0 && (
-                <div className="text-green-600 text-sm">
-                  {Math.round((Number(newProduct.mrp) - Number(newProduct.sellingPrice)) / Number(newProduct.mrp) * 100)}% off
+
+              {discountPercentage() > 0 && (
+                <div className="col-span-1 md:col-span-2">
+                  <Alert
+                    variant="success"
+                    title="Discount Applied"
+                    message={`Customers will save ${discountPercentage()}% on this product!`}
+                  />
                 </div>
               )}
             </div>
-          </div>
-        </div>
-        
-        {/* Tags Section */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Product Tags</h2>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {newProduct.tags.map((tag, index) => (
-              <div key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full flex items-center">
-                {tag}
-                <button 
-                  onClick={() => removeTag(tag)}
-                  className="ml-1 text-blue-800 hover:text-red-500"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="flex">
-            <input
-              className="border p-2 flex-grow rounded-l"
-              placeholder="Add a tag"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && addTag()}
-            />
-            <button
-              className="bg-blue-500 text-white p-2 rounded-r"
-              onClick={addTag}
-            >
-              Add Tag
-            </button>
-          </div>
-        </div>
+          </Card>
 
-        {/* Product Origin/Import Details */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Origin & Import Details</h2>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">Country of Origin</label>
-            <input
-              className="border border-gray-300 p-2 mb-4 w-full rounded"
-              placeholder="e.g., India, Japan, Germany"
-              value={newProduct.origin}
-              onChange={(e) => setNewProduct({ ...newProduct, origin: e.target.value })}
-            />
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('basic')} variant="outline">
+              Back
+            </Button>
+            <Button onClick={() => setActiveTab('images')} icon={<ImageIcon className="w-4 h-4" />} iconPosition="right">
+              Next: Images
+            </Button>
           </div>
-          
-          <div className="flex items-center mb-4">
-            <input
-              type="checkbox"
-              checked={newProduct.importDetails.isImported}
-              onChange={(e) => setNewProduct({ 
-                ...newProduct, 
-                importDetails: { 
-                  ...newProduct.importDetails, 
-                  isImported: e.target.checked 
-                } 
-              })}
-              className="mr-2"
-            />
-            <label className="text-gray-700">This is an imported product</label>
-          </div>
-          
-          {newProduct.importDetails.isImported && (
-            <>
-              <div className="pl-6 mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">Imported From</label>
-                <input
-                  className="border border-gray-300 p-2 mb-4 w-full rounded"
-                  placeholder="e.g., Japan"
-                  value={newProduct.importDetails.country}
-                  onChange={(e) => setNewProduct({ 
-                    ...newProduct, 
-                    importDetails: { 
-                      ...newProduct.importDetails, 
-                      country: e.target.value 
-                    } 
-                  })}
-                />
-              </div>
-              <div className="pl-6">
-                <label className="block text-gray-700 text-sm font-bold mb-2">Delivery Note</label>
-                <textarea
-                  className="border border-gray-300 p-2 mb-4 w-full rounded"
-                  placeholder="e.g., May take 3-4 weeks for delivery"
-                  value={newProduct.importDetails.deliveryNote}
-                  onChange={(e) => setNewProduct({ 
-                    ...newProduct, 
-                    importDetails: { 
-                      ...newProduct.importDetails, 
-                      deliveryNote: e.target.value 
-                    } 
-                  })}
-                  rows="2"
-                />
-              </div>
-            </>
-          )}
-        </div>
+        </motion.div>
+      )}
 
-        {/* Warranty & Guarantee Section */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Warranty & Guarantee</h2>
-          
-          {/* Warranty Section */}
-          <div className="mb-6">
-            <div className="flex items-center mb-4">
-              <input
-                type="checkbox"
-                checked={newProduct.warranty.available}
-                onChange={(e) => setNewProduct({ 
-                  ...newProduct, 
-                  warranty: { 
-                    ...newProduct.warranty, 
-                    available: e.target.checked 
-                  } 
-                })}
-                className="mr-2"
-              />
-              <label className="text-gray-700">Product has warranty</label>
+      {/* Images Tab */}
+      {activeTab === 'images' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <Card title="Product Images" icon={<ImageIcon className="w-5 h-5 text-pink-600" />}>
+            <Alert
+              variant="info"
+              message="Add high-quality images for better product presentation. First image will be the primary display image."
+            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+              {['image', 'image2', 'image3'].map((imgKey, index) => (
+                <div key={imgKey}>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    {index === 0 ? 'Primary Image' : index === 1 ? 'Secondary Image' : 'Tertiary Image'}
+                    {index === 0 && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  <Input
+                    type="url"
+                    placeholder="Image URL"
+                    value={newProduct[imgKey]}
+                    onChange={(e) => setNewProduct({ ...newProduct, [imgKey]: e.target.value })}
+                    error={index === 0 ? errors.image : undefined}
+                    className="mb-0"
+                  />
+                  {newProduct[imgKey] && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="mt-2 relative group"
+                    >
+                      <img
+                        src={newProduct[imgKey]}
+                        alt={`Preview ${index + 1}`}
+                        className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 group-hover:border-blue-500 transition-all duration-200"
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/300x200?text=Invalid+Image';
+                        }}
+                      />
+                      <button
+                        onClick={() => setNewProduct({ ...newProduct, [imgKey]: '' })}
+                        className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </motion.div>
+                  )}
+                </div>
+              ))}
             </div>
-            
-            {newProduct.warranty.available && (
-              <div className="pl-6">
-                <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Warranty Period</label>
-                  <input
-                    className="border border-gray-300 p-2 mb-4 w-full rounded"
+          </Card>
+
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('pricing')} variant="outline">
+              Back
+            </Button>
+            <Button onClick={() => setActiveTab('details')} icon={<Info className="w-4 h-4" />} iconPosition="right">
+              Next: Details
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Details Tab */}
+      {activeTab === 'details' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          {/* Tags */}
+          <Card title="Product Tags" icon={<Tag className="w-5 h-5 text-indigo-600" />}>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {newProduct.tags.map((tag, index) => (
+                <Badge key={index} variant="info">
+                  {tag}
+                  <button
+                    onClick={() => removeTag(tag)}
+                    className="ml-2 hover:text-red-500"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add a tag"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                className="mb-0 flex-1"
+              />
+              <Button onClick={addTag} icon={<Plus className="w-4 h-4" />}>
+                Add
+              </Button>
+            </div>
+          </Card>
+
+          {/* Features */}
+          <Card title="Key Features" icon={<Check className="w-5 h-5 text-green-600" />}>
+            <div className="space-y-2 mb-4">
+              {newProduct.features.map((feature, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-700">• {feature}</span>
+                  <button
+                    onClick={() => removeFeature(index)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add a feature"
+                value={featureInput}
+                onChange={(e) => setFeatureInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addFeature())}
+                className="mb-0 flex-1"
+              />
+              <Button onClick={addFeature} icon={<Plus className="w-4 h-4" />}>
+                Add
+              </Button>
+            </div>
+          </Card>
+
+          {/* Specifications */}
+          <Card title="Specifications" icon={<Info className="w-5 h-5 text-blue-600" />}>
+            <div className="space-y-2 mb-4">
+              {newProduct.specifications.map((spec, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1 grid grid-cols-2 gap-4">
+                    <span className="font-semibold text-gray-700">{spec.key}:</span>
+                    <span className="text-gray-600">{spec.value}</span>
+                  </div>
+                  <button
+                    onClick={() => removeSpecification(index)}
+                    className="text-red-500 hover:text-red-700 ml-4"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                placeholder="Specification name"
+                value={specKey}
+                onChange={(e) => setSpecKey(e.target.value)}
+                className="mb-0"
+              />
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Value"
+                  value={specValue}
+                  onChange={(e) => setSpecValue(e.target.value)}
+                  className="mb-0 flex-1"
+                />
+                <Button onClick={addSpecification} icon={<Plus className="w-4 h-4" />}>
+                  Add
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Additional Info */}
+          <Card title="Additional Information">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Country of Origin
+                </label>
+                <Input
+                  placeholder="e.g., India, Japan, Germany"
+                  value={newProduct.origin}
+                  onChange={(e) => setNewProduct({ ...newProduct, origin: e.target.value })}
+                  className="mb-0"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Additional Notes
+                </label>
+                <textarea
+                  value={newProduct.additionalInfo}
+                  onChange={(e) => setNewProduct({ ...newProduct, additionalInfo: e.target.value })}
+                  rows="3"
+                  placeholder="Any additional information..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="showOnHome"
+                  checked={newProduct.showOnHome}
+                  onChange={(e) => setNewProduct({ ...newProduct, showOnHome: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="showOnHome" className="text-gray-700 cursor-pointer">
+                  Display this product on homepage
+                </label>
+              </div>
+            </div>
+          </Card>
+
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('images')} variant="outline">
+              Back
+            </Button>
+            <Button onClick={() => setActiveTab('warranty')} icon={<Shield className="w-4 h-4" />} iconPosition="right">
+              Next: Warranty
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Warranty Tab */}
+      {activeTab === 'warranty' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <Card title="Warranty & Guarantee" icon={<Shield className="w-5 h-5 text-yellow-600" />}>
+            {/* Warranty */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="checkbox"
+                  id="warranty"
+                  checked={newProduct.warranty.available}
+                  onChange={(e) => setNewProduct({
+                    ...newProduct,
+                    warranty: { ...newProduct.warranty, available: e.target.checked }
+                  })}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="warranty" className="font-semibold text-gray-700 cursor-pointer">
+                  Product has warranty
+                </label>
+              </div>
+
+              {newProduct.warranty.available && (
+                <div className="pl-6 space-y-4">
+                  <Input
+                    label="Warranty Period"
                     placeholder="e.g., 1 year, 6 months"
                     value={newProduct.warranty.period}
-                    onChange={(e) => setNewProduct({ 
-                      ...newProduct, 
-                      warranty: { 
-                        ...newProduct.warranty, 
-                        period: e.target.value 
-                      } 
+                    onChange={(e) => setNewProduct({
+                      ...newProduct,
+                      warranty: { ...newProduct.warranty, period: e.target.value }
                     })}
                   />
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Warranty Details
+                    </label>
+                    <textarea
+                      value={newProduct.warranty.details}
+                      onChange={(e) => setNewProduct({
+                        ...newProduct,
+                        warranty: { ...newProduct.warranty, details: e.target.value }
+                      })}
+                      rows="3"
+                      placeholder="Describe what the warranty covers..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Warranty Details</label>
-                  <textarea
-                    className="border border-gray-300 p-2 mb-4 w-full rounded"
-                    placeholder="Describe what the warranty covers..."
-                    value={newProduct.warranty.details}
-                    onChange={(e) => setNewProduct({ 
-                      ...newProduct, 
-                      warranty: { 
-                        ...newProduct.warranty, 
-                        details: e.target.value 
-                      } 
-                    })}
-                    rows="3"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Guarantee Section */}
-          <div>
-            <div className="flex items-center mb-4">
-              <input
-                type="checkbox"
-                checked={newProduct.guarantee.available}
-                onChange={(e) => setNewProduct({ 
-                  ...newProduct, 
-                  guarantee: { 
-                    ...newProduct.guarantee, 
-                    available: e.target.checked 
-                  } 
-                })}
-                className="mr-2"
-              />
-              <label className="text-gray-700">Product has guarantee</label>
+              )}
             </div>
-            
-            {newProduct.guarantee.available && (
-              <div className="pl-6">
-                <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Guarantee Period</label>
-                  <input
-                    className="border border-gray-300 p-2 mb-4 w-full rounded"
+
+            {/* Guarantee */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="checkbox"
+                  id="guarantee"
+                  checked={newProduct.guarantee.available}
+                  onChange={(e) => setNewProduct({
+                    ...newProduct,
+                    guarantee: { ...newProduct.guarantee, available: e.target.checked }
+                  })}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="guarantee" className="font-semibold text-gray-700 cursor-pointer">
+                  Product has guarantee
+                </label>
+              </div>
+
+              {newProduct.guarantee.available && (
+                <div className="pl-6 space-y-4">
+                  <Input
+                    label="Guarantee Period"
                     placeholder="e.g., Lifetime, 3 years"
                     value={newProduct.guarantee.period}
-                    onChange={(e) => setNewProduct({ 
-                      ...newProduct, 
-                      guarantee: { 
-                        ...newProduct.guarantee, 
-                        period: e.target.value 
-                      } 
+                    onChange={(e) => setNewProduct({
+                      ...newProduct,
+                      guarantee: { ...newProduct.guarantee, period: e.target.value }
                     })}
                   />
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Guarantee Details
+                    </label>
+                    <textarea
+                      value={newProduct.guarantee.details}
+                      onChange={(e) => setNewProduct({
+                        ...newProduct,
+                        guarantee: { ...newProduct.guarantee, details: e.target.value }
+                      })}
+                      rows="3"
+                      placeholder="Describe what the guarantee covers..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Import Details */}
+          <Card title="Import Information" icon={<Globe className="w-5 h-5 text-purple-600" />}>
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                type="checkbox"
+                id="imported"
+                checked={newProduct.importDetails.isImported}
+                onChange={(e) => setNewProduct({
+                  ...newProduct,
+                  importDetails: { ...newProduct.importDetails, isImported: e.target.checked }
+                })}
+                className="w-4 h-4"
+              />
+              <label htmlFor="imported" className="font-semibold text-gray-700 cursor-pointer">
+                This is an imported product
+              </label>
+            </div>
+
+            {newProduct.importDetails.isImported && (
+              <div className="pl-6 space-y-4">
+                <Input
+                  label="Imported From"
+                  placeholder="e.g., Japan, USA"
+                  value={newProduct.importDetails.country}
+                  onChange={(e) => setNewProduct({
+                    ...newProduct,
+                    importDetails: { ...newProduct.importDetails, country: e.target.value }
+                  })}
+                />
                 <div>
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Guarantee Details</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Delivery Note
+                  </label>
                   <textarea
-                    className="border border-gray-300 p-2 mb-4 w-full rounded"
-                    placeholder="Describe what the guarantee covers..."
-                    value={newProduct.guarantee.details}
-                    onChange={(e) => setNewProduct({ 
-                      ...newProduct, 
-                      guarantee: { 
-                        ...newProduct.guarantee, 
-                        details: e.target.value 
-                      } 
+                    value={newProduct.importDetails.deliveryNote}
+                    onChange={(e) => setNewProduct({
+                      ...newProduct,
+                      importDetails: { ...newProduct.importDetails, deliveryNote: e.target.value }
                     })}
-                    rows="3"
+                    rows="2"
+                    placeholder="e.g., May take 3-4 weeks for delivery"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </Card>
 
-        {/* Description & Additional Info */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Description & Additional Info</h2>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">Product Description *</label>
-            <textarea
-              className="border border-gray-300 p-2 mb-4 w-full rounded"
-              placeholder="Detailed description of the product..."
-              value={newProduct.description}
-              onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-              rows="4"
-              required
-            />
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('details')} variant="outline">
+              Back
+            </Button>
+            <Button
+              onClick={handleAddProduct}
+              variant="success"
+              loading={isSubmitting}
+              icon={<Check className="w-4 h-4" />}
+              iconPosition="right"
+            >
+              {isSubmitting ? "Adding Product..." : "Add Product"}
+            </Button>
           </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Additional Information</label>
-            <textarea
-              className="border border-gray-300 p-2 mb-4 w-full rounded"
-              placeholder="Any additional information like usage instructions, materials, etc."
-              value={newProduct.additionalInfo}
-              onChange={(e) => setNewProduct({ ...newProduct, additionalInfo: e.target.value })}
-              rows="4"
-            />
-          </div>
-        </div>
-
-        {/* Product Images */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Product Images</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {['image', 'image2', 'image3'].map((imgKey, index) => (
-              <div key={imgKey} className="relative mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  {index === 0 ? 'Primary Image URL *' : index === 1 ? 'Secondary Image URL' : 'Tertiary Image URL'}
-                </label>
-                <input
-                  className="border border-gray-300 p-2 mb-2 w-full rounded"
-                  placeholder={`${index === 0 ? 'Primary' : index === 1 ? 'Secondary' : 'Tertiary'} Image URL`}
-                  value={newProduct[imgKey]}
-                  onChange={(e) => handleImageChange(e, imgKey)}
-                  required={index === 0}
-                />
-                {newProduct[imgKey] && (
-                  <img 
-                    src={newProduct[imgKey]} 
-                    alt={`Preview of ${imgKey}`} 
-                    className="w-full h-40 object-contain border rounded" 
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-        
-        {/* Visibility Settings */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Visibility Settings</h2>
-          <div className="flex items-center mb-4">
-            <input
-              type="checkbox"
-              checked={newProduct.showOnHome}
-              onChange={(e) => setNewProduct({ ...newProduct, showOnHome: e.target.checked })}
-              className="mr-2"
-            />
-            <label className="text-gray-700">Show on Home Page</label>
-          </div>
-        </div>
-
-        <button
-          className={`w-full py-3 rounded text-white font-bold transition-all duration-300 ${
-            isSubmitting 
-              ? 'bg-gray-400 cursor-not-allowed' 
-              : submissionStatus === 'success' 
-                ? 'bg-green-500'
-                : submissionStatus === 'error'
-                  ? 'bg-red-500'
-                  : 'bg-blue-500 hover:bg-blue-600'
-          }`}
-          onClick={handleAddProduct}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Adding Product..." :
-           submissionStatus === 'success' ? "Product Added!" :
-           submissionStatus === 'error' ? "Error! Try Again" : "Add Product"}
-        </button>
-      </div>
-    </div>
+        </motion.div>
+      )}
+    </motion.div>
   );
 };
 

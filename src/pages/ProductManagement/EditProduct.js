@@ -2,557 +2,709 @@ import { useEffect, useState } from "react";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useNavigate, useParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  Package, DollarSign, Image as ImageIcon, Tag, Info, Check,
+  X, Plus, Trash2, Globe, Shield, Save
+} from "react-feather";
+import { Button, Card, Input, Alert, Badge, LoadingSpinner } from "../../components/ui";
+import { toast } from "react-toastify";
 
-/**
- * Product types available for selection
- * These categories help organize products for better browsing experience
- */
 const productTypes = [
-  'Notebooks and Journals',
-  'Pens and Pencils',
-  'Paper and Notepads',
-  'Planners and Calendars',
-  'Office Supplies',
-  'Art Supplies',
-  'Desk Accessories',
-  'Cards and Envelopes',
-  'Writing Accessories',
+  'Notebooks and Journals', 'Pens and Pencils', 'Paper and Notepads',
+  'Planners and Calendars', 'Office Supplies', 'Art Supplies',
+  'Desk Accessories', 'Cards and Envelopes', 'Writing Accessories',
   'Gift Wrap and Packaging',
 ];
 
-/**
- * Brands available for selection
- * Maintaining a consistent brand list ensures data integrity
- */
 const brands = [
-  'Camel',
-  'Faber-Castell',
-  'Staedtler',
-  'Doms',
-  'Camlin',
-  'Luxor',
-  'Monami',
-  'Schneider',
-  'Pentel',
-  'Pilot',
-  'Kokuyo',
-  'Nataraj',
-  'OHPen',
-  'Bic',
-  'Zebra',
-  'Stabilo',
+  'Camel', 'Faber-Castell', 'Staedtler', 'Doms', 'Camlin', 'Luxor',
+  'Monami', 'Schneider', 'Pentel', 'Pilot', 'Kokuyo', 'Nataraj',
+  'OHPen', 'Bic', 'Zebra', 'Stabilo',
 ];
 
 /**
- * EditProduct Component
- * Allows administrators to modify existing product information
- * Enhanced with additional features for product management
+ * Enhanced Edit Product Page with Modern UI
  */
 const EditProduct = () => {
-  const [product, setProduct] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionStatus, setSubmissionStatus] = useState(null);
-  const [tagInput, setTagInput] = useState("");
   const { id } = useParams();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('basic');
+  const [loading, setLoading] = useState(true);
+  const [product, setProduct] = useState(null);
+  const [tagInput, setTagInput] = useState("");
+  const [featureInput, setFeatureInput] = useState("");
+  const [specKey, setSpecKey] = useState("");
+  const [specValue, setSpecValue] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  /**
-   * Fetch product data when component mounts or ID changes
-   */
+  const tabs = [
+    { id: 'basic', label: 'Basic Info', icon: Package },
+    { id: 'pricing', label: 'Pricing', icon: DollarSign },
+    { id: 'images', label: 'Images', icon: ImageIcon },
+    { id: 'details', label: 'Details', icon: Info },
+    { id: 'warranty', label: 'Warranty', icon: Shield }
+  ];
+
   useEffect(() => {
-    const fetchProduct = async () => {
+    fetchProduct();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const fetchProduct = async () => {
+    try {
+      setLoading(true);
       const productRef = doc(db, "products", id);
       const productDoc = await getDoc(productRef);
+
       if (productDoc.exists()) {
-        // Initialize with all required fields or default values if they don't exist
         const productData = productDoc.data();
         setProduct({
           ...productData,
-          mrp: productData.mrp || productData.price || 0,
-          sellingPrice: productData.sellingPrice || productData.price || 0,
+          mrp: productData.mrp || productData.price || "",
+          sellingPrice: productData.sellingPrice || productData.price || "",
           tags: productData.tags || [],
+          features: productData.features || [],
+          specifications: productData.specifications || [],
           origin: productData.origin || "",
           warranty: productData.warranty || { available: false, period: "", details: "" },
           guarantee: productData.guarantee || { available: false, period: "", details: "" },
           additionalInfo: productData.additionalInfo || "",
           importDetails: productData.importDetails || { isImported: false, country: "", deliveryNote: "" },
         });
+      } else {
+        toast.error("Product not found");
+        navigate("/products");
       }
-    };
-    fetchProduct();
-  }, [id]);
+    } catch (error) {
+      console.error("Error fetching product:", error);
+      toast.error("Failed to load product");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  /**
-   * Handle product update submission
-   * Includes loading state and success/error feedback
-   */
   const handleUpdateProduct = async () => {
+    if (!product.name || !product.sellingPrice) {
+      toast.error("Please fill in required fields");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      setSubmissionStatus("submitting");
-      
+
       const productRef = doc(db, "products", id);
-      await updateDoc(productRef, product);
-      
-      setSubmissionStatus("success");
-      
-      // Reset status after a delay and navigate back
+      const updateData = {
+        ...product,
+        sellingPrice: Number(product.sellingPrice || product.price),
+        mrp: Number(product.mrp || product.price),
+        price: Number(product.sellingPrice || product.price),
+        stock: Number(product.stock),
+        updatedAt: new Date()
+      };
+
+      await updateDoc(productRef, updateData);
+
+      toast.success("Product updated successfully!");
       setTimeout(() => {
-        setIsSubmitting(false);
-        setSubmissionStatus(null);
         navigate("/products");
-      }, 2000);
+      }, 1500);
     } catch (error) {
       console.error("Error updating product:", error);
-      setSubmissionStatus("error");
+      toast.error("Failed to update product");
+    } finally {
       setIsSubmitting(false);
     }
   };
 
-  /**
-   * Add a new tag to the product
-   */
   const addTag = () => {
     if (tagInput.trim() && !product.tags.includes(tagInput.trim())) {
-      setProduct({
-        ...product,
-        tags: [...product.tags, tagInput.trim()]
-      });
+      setProduct({ ...product, tags: [...product.tags, tagInput.trim()] });
       setTagInput("");
     }
   };
 
-  /**
-   * Remove a tag from the product
-   */
   const removeTag = (tagToRemove) => {
-    setProduct({
-      ...product,
-      tags: product.tags.filter(tag => tag !== tagToRemove)
-    });
+    setProduct({ ...product, tags: product.tags.filter(tag => tag !== tagToRemove) });
   };
 
-  if (!product) return <div className="flex justify-center items-center h-64">
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-  </div>;
+  const addFeature = () => {
+    if (featureInput.trim()) {
+      setProduct({ ...product, features: [...product.features, featureInput.trim()] });
+      setFeatureInput("");
+    }
+  };
+
+  const removeFeature = (index) => {
+    setProduct({ ...product, features: product.features.filter((_, i) => i !== index) });
+  };
+
+  const addSpecification = () => {
+    if (specKey.trim() && specValue.trim()) {
+      setProduct({
+        ...product,
+        specifications: [...product.specifications, { key: specKey.trim(), value: specValue.trim() }]
+      });
+      setSpecKey("");
+      setSpecValue("");
+    }
+  };
+
+  const removeSpecification = (index) => {
+    setProduct({ ...product, specifications: product.specifications.filter((_, i) => i !== index) });
+  };
+
+  const discountPercentage = () => {
+    if (!product) return 0;
+    const mrp = Number(product.mrp);
+    const selling = Number(product.sellingPrice);
+    if (mrp > selling && selling > 0) {
+      return Math.round(((mrp - selling) / mrp) * 100);
+    }
+    return 0;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <LoadingSpinner size="xl" text="Loading product..." />
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <Alert variant="danger" title="Product Not Found" message="The product you're looking for doesn't exist." />
+    );
+  }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Edit Product</h1>
-      <div className="bg-white shadow-md rounded p-6 mb-6">
-        {/* Basic Information Section */}
-        <h2 className="text-xl font-semibold mb-4 border-b pb-2">Basic Information</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Product Name</label>
-            <input
-              className="border p-2 mb-4 w-full rounded"
-              placeholder="Name"
-              value={product.name}
-              onChange={(e) => setProduct({ ...product, name: e.target.value })}
-            />
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Brand</label>
-            <select
-              className="border p-2 mb-4 w-full rounded"
-              value={product.brand}
-              onChange={(e) => setProduct({ ...product, brand: e.target.value })}
-            >
-              <option value="">Select Brand</option>
-              {brands.map((brand) => (
-                <option key={brand} value={brand}>{brand}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Product Type</label>
-            <select
-              className="border p-2 mb-4 w-full rounded"
-              value={product.type}
-              onChange={(e) => setProduct({ ...product, type: e.target.value })}
-            >
-              <option value="">Select Type</option>
-              {productTypes.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Stock</label>
-            <input
-              type="number"
-              className="border p-2 mb-4 w-full rounded"
-              placeholder="Stock"
-              value={product.stock}
-              onChange={(e) => setProduct({ ...product, stock: Number(e.target.value) })}
-            />
-          </div>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="max-w-6xl mx-auto space-y-6"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Edit Product</h1>
+          <p className="text-gray-600 mt-1">Update product information for: <span className="font-semibold">{product.name}</span></p>
         </div>
+        <Button
+          variant="ghost"
+          onClick={() => navigate("/products")}
+          icon={<X className="w-4 h-4" />}
+        >
+          Cancel
+        </Button>
+      </div>
 
-        {/* Product ID Information */}
-        <div className="mb-6 bg-gray-50 p-4 rounded-lg border-l-4 border-blue-500">
-          <h2 className="text-xl font-semibold mb-2">Product URL/ID</h2>
-          <div className="flex items-center">
-            <span className="font-medium mr-2">website.com/product/</span>
-            <span className="text-blue-600 font-bold">{id}</span>
-          </div>
-          <p className="text-gray-600 text-sm mt-2">
-            <span className="text-red-500 font-medium">Note:</span> Product ID cannot be changed after creation. 
-            It is used as the URL for this product.
-          </p>
+      {/* Progress Indicator */}
+      <Card>
+        <div className="flex gap-2 overflow-x-auto">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <motion.button
+                key={tab.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </motion.button>
+            );
+          })}
         </div>
-        
-        {/* Pricing Section */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Pricing</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">MRP (₹)</label>
-              <input
-                type="number"
-                className="border p-2 mb-4 w-full rounded"
-                placeholder="MRP Price"
-                value={product.mrp}
-                onChange={(e) => setProduct({ ...product, mrp: Number(e.target.value) })}
+      </Card>
+
+      {/* Basic Info Tab */}
+      {activeTab === 'basic' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <Card title="Basic Information" icon={<Package className="w-5 h-5 text-blue-600" />}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input
+                label="Product Name"
+                placeholder="Enter product name"
+                value={product.name}
+                onChange={(e) => setProduct({ ...product, name: e.target.value })}
+                required
               />
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Brand</label>
+                <select
+                  value={product.brand}
+                  onChange={(e) => setProduct({ ...product, brand: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Brand</option>
+                  {brands.map((brand) => (
+                    <option key={brand} value={brand}>{brand}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                <select
+                  value={product.type}
+                  onChange={(e) => setProduct({ ...product, type: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select Category</option>
+                  {productTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <Input
+                label="Stock Quantity"
+                type="number"
+                placeholder="Available stock"
+                value={product.stock}
+                onChange={(e) => setProduct({ ...product, stock: e.target.value })}
+                required
+              />
+
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Product Description <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={product.description}
+                  onChange={(e) => setProduct({ ...product, description: e.target.value })}
+                  rows="4"
+                  placeholder="Detailed description of the product..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">Selling Price (₹)</label>
-              <input
+          </Card>
+
+          <Alert
+            variant="info"
+            title="Product ID"
+            message={`This product's unique identifier is: ${id}`}
+          />
+
+          <div className="flex justify-end">
+            <Button onClick={() => setActiveTab('pricing')} icon={<DollarSign className="w-4 h-4" />} iconPosition="right">
+              Next: Pricing
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Pricing Tab */}
+      {activeTab === 'pricing' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <Card title="Pricing Information" icon={<DollarSign className="w-5 h-5 text-green-600" />}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input
+                label="MRP (Maximum Retail Price)"
                 type="number"
-                className="border p-2 mb-4 w-full rounded"
-                placeholder="Selling Price"
-                value={product.sellingPrice}
-                onChange={(e) => setProduct({ ...product, sellingPrice: Number(e.target.value), price: Number(e.target.value) })}
+                placeholder="₹ 0.00"
+                value={product.mrp}
+                onChange={(e) => setProduct({ ...product, mrp: e.target.value })}
+                icon={<DollarSign className="w-4 h-4" />}
               />
-              {product.mrp > product.sellingPrice && (
-                <div className="text-green-600 text-sm">
-                  {Math.round((product.mrp - product.sellingPrice) / product.mrp * 100)}% off
+
+              <Input
+                label="Selling Price"
+                type="number"
+                placeholder="₹ 0.00"
+                value={product.sellingPrice}
+                onChange={(e) => setProduct({
+                  ...product,
+                  sellingPrice: e.target.value,
+                  price: e.target.value
+                })}
+                icon={<DollarSign className="w-4 h-4" />}
+                required
+              />
+
+              {discountPercentage() > 0 && (
+                <div className="col-span-1 md:col-span-2">
+                  <Alert
+                    variant="success"
+                    title="Discount Applied"
+                    message={`Customers will save ${discountPercentage()}% on this product!`}
+                  />
                 </div>
               )}
             </div>
-          </div>
-        </div>
-        
-        {/* Tags Section */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Product Tags</h2>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {product.tags.map((tag, index) => (
-              <div key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full flex items-center">
-                {tag}
-                <button 
-                  onClick={() => removeTag(tag)}
-                  className="ml-1 text-blue-800 hover:text-red-500"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="flex">
-            <input
-              className="border p-2 flex-grow rounded-l"
-              placeholder="Add a tag"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && addTag()}
-            />
-            <button
-              className="bg-blue-500 text-white p-2 rounded-r"
-              onClick={addTag}
-            >
-              Add Tag
-            </button>
-          </div>
-        </div>
+          </Card>
 
-        {/* Product Origin/Import Details */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Origin & Import Details</h2>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">Country of Origin</label>
-            <input
-              className="border p-2 mb-4 w-full rounded"
-              placeholder="e.g., India, Japan, Germany"
-              value={product.origin}
-              onChange={(e) => setProduct({ ...product, origin: e.target.value })}
-            />
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('basic')} variant="outline">Back</Button>
+            <Button onClick={() => setActiveTab('images')} icon={<ImageIcon className="w-4 h-4" />} iconPosition="right">
+              Next: Images
+            </Button>
           </div>
-          
-          <div className="flex items-center mb-4">
-            <input
-              type="checkbox"
-              checked={product.importDetails.isImported}
-              onChange={(e) => setProduct({ 
-                ...product, 
-                importDetails: { 
-                  ...product.importDetails, 
-                  isImported: e.target.checked 
-                } 
-              })}
-              className="mr-2"
-            />
-            <label className="text-gray-700">This is an imported product</label>
-          </div>
-          
-          {product.importDetails.isImported && (
-            <>
-              <div className="pl-6 mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">Imported From</label>
-                <input
-                  className="border p-2 mb-4 w-full rounded"
-                  placeholder="e.g., Japan"
-                  value={product.importDetails.country}
-                  onChange={(e) => setProduct({ 
-                    ...product, 
-                    importDetails: { 
-                      ...product.importDetails, 
-                      country: e.target.value 
-                    } 
-                  })}
-                />
-              </div>
-              <div className="pl-6">
-                <label className="block text-gray-700 text-sm font-bold mb-2">Delivery Note</label>
-                <textarea
-                  className="border p-2 mb-4 w-full rounded"
-                  placeholder="e.g., May take 3-4 weeks for delivery"
-                  value={product.importDetails.deliveryNote}
-                  onChange={(e) => setProduct({ 
-                    ...product, 
-                    importDetails: { 
-                      ...product.importDetails, 
-                      deliveryNote: e.target.value 
-                    } 
-                  })}
-                  rows="2"
-                />
-              </div>
-            </>
-          )}
-        </div>
+        </motion.div>
+      )}
 
-        {/* Warranty & Guarantee Section */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Warranty & Guarantee</h2>
-          
-          {/* Warranty Section */}
-          <div className="mb-6">
-            <div className="flex items-center mb-4">
-              <input
-                type="checkbox"
-                checked={product.warranty.available}
-                onChange={(e) => setProduct({ 
-                  ...product, 
-                  warranty: { 
-                    ...product.warranty, 
-                    available: e.target.checked 
-                  } 
-                })}
-                className="mr-2"
-              />
-              <label className="text-gray-700">Product has warranty</label>
+      {/* Images Tab */}
+      {activeTab === 'images' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <Card title="Product Images" icon={<ImageIcon className="w-5 h-5 text-pink-600" />}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {['image', 'image2', 'image3'].map((imgKey, index) => (
+                <div key={imgKey}>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    {index === 0 ? 'Primary Image' : index === 1 ? 'Secondary Image' : 'Tertiary Image'}
+                    {index === 0 && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  <Input
+                    type="url"
+                    placeholder="Image URL"
+                    value={product[imgKey] || ""}
+                    onChange={(e) => setProduct({ ...product, [imgKey]: e.target.value })}
+                    className="mb-0"
+                  />
+                  {product[imgKey] && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="mt-2 relative group"
+                    >
+                      <img
+                        src={product[imgKey]}
+                        alt={`Preview ${index + 1}`}
+                        className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 group-hover:border-blue-500 transition-all duration-200"
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/300x200?text=Invalid+Image';
+                        }}
+                      />
+                      <button
+                        onClick={() => setProduct({ ...product, [imgKey]: '' })}
+                        className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </motion.div>
+                  )}
+                </div>
+              ))}
             </div>
-            
-            {product.warranty.available && (
-              <div className="pl-6">
-                <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Warranty Period</label>
-                  <input
-                    className="border p-2 mb-4 w-full rounded"
+          </Card>
+
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('pricing')} variant="outline">Back</Button>
+            <Button onClick={() => setActiveTab('details')} icon={<Info className="w-4 h-4" />} iconPosition="right">
+              Next: Details
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Details Tab */}
+      {activeTab === 'details' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          {/* Tags */}
+          <Card title="Product Tags" icon={<Tag className="w-5 h-5 text-indigo-600" />}>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {product.tags.map((tag, index) => (
+                <Badge key={index} variant="info">
+                  {tag}
+                  <button onClick={() => removeTag(tag)} className="ml-2 hover:text-red-500">
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add a tag"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                className="mb-0 flex-1"
+              />
+              <Button onClick={addTag} icon={<Plus className="w-4 h-4" />}>Add</Button>
+            </div>
+          </Card>
+
+          {/* Features */}
+          <Card title="Key Features" icon={<Check className="w-5 h-5 text-green-600" />}>
+            <div className="space-y-2 mb-4">
+              {product.features.map((feature, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-700">• {feature}</span>
+                  <button onClick={() => removeFeature(index)} className="text-red-500 hover:text-red-700">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add a feature"
+                value={featureInput}
+                onChange={(e) => setFeatureInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addFeature())}
+                className="mb-0 flex-1"
+              />
+              <Button onClick={addFeature} icon={<Plus className="w-4 h-4" />}>Add</Button>
+            </div>
+          </Card>
+
+          {/* Specifications */}
+          <Card title="Specifications" icon={<Info className="w-5 h-5 text-blue-600" />}>
+            <div className="space-y-2 mb-4">
+              {product.specifications.map((spec, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1 grid grid-cols-2 gap-4">
+                    <span className="font-semibold text-gray-700">{spec.key}:</span>
+                    <span className="text-gray-600">{spec.value}</span>
+                  </div>
+                  <button onClick={() => removeSpecification(index)} className="text-red-500 hover:text-red-700 ml-4">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Specification name" value={specKey} onChange={(e) => setSpecKey(e.target.value)} className="mb-0" />
+              <div className="flex gap-2">
+                <Input placeholder="Value" value={specValue} onChange={(e) => setSpecValue(e.target.value)} className="mb-0 flex-1" />
+                <Button onClick={addSpecification} icon={<Plus className="w-4 h-4" />}>Add</Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Additional Info */}
+          <Card title="Additional Information">
+            <div className="space-y-4">
+              <Input
+                label="Country of Origin"
+                placeholder="e.g., India, Japan, Germany"
+                value={product.origin}
+                onChange={(e) => setProduct({ ...product, origin: e.target.value })}
+                className="mb-0"
+              />
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Additional Notes</label>
+                <textarea
+                  value={product.additionalInfo}
+                  onChange={(e) => setProduct({ ...product, additionalInfo: e.target.value })}
+                  rows="3"
+                  placeholder="Any additional information..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="showOnHome"
+                  checked={product.showOnHome || false}
+                  onChange={(e) => setProduct({ ...product, showOnHome: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="showOnHome" className="text-gray-700 cursor-pointer">
+                  Display this product on homepage
+                </label>
+              </div>
+            </div>
+          </Card>
+
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('images')} variant="outline">Back</Button>
+            <Button onClick={() => setActiveTab('warranty')} icon={<Shield className="w-4 h-4" />} iconPosition="right">
+              Next: Warranty
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Warranty Tab */}
+      {activeTab === 'warranty' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <Card title="Warranty & Guarantee" icon={<Shield className="w-5 h-5 text-yellow-600" />}>
+            {/* Warranty */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="checkbox"
+                  id="warranty"
+                  checked={product.warranty.available}
+                  onChange={(e) => setProduct({
+                    ...product,
+                    warranty: { ...product.warranty, available: e.target.checked }
+                  })}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="warranty" className="font-semibold text-gray-700 cursor-pointer">
+                  Product has warranty
+                </label>
+              </div>
+
+              {product.warranty.available && (
+                <div className="pl-6 space-y-4">
+                  <Input
+                    label="Warranty Period"
                     placeholder="e.g., 1 year, 6 months"
                     value={product.warranty.period}
-                    onChange={(e) => setProduct({ 
-                      ...product, 
-                      warranty: { 
-                        ...product.warranty, 
-                        period: e.target.value 
-                      } 
+                    onChange={(e) => setProduct({
+                      ...product,
+                      warranty: { ...product.warranty, period: e.target.value }
                     })}
                   />
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Warranty Details</label>
+                    <textarea
+                      value={product.warranty.details}
+                      onChange={(e) => setProduct({
+                        ...product,
+                        warranty: { ...product.warranty, details: e.target.value }
+                      })}
+                      rows="3"
+                      placeholder="Describe what the warranty covers..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Warranty Details</label>
-                  <textarea
-                    className="border p-2 mb-4 w-full rounded"
-                    placeholder="Describe what the warranty covers..."
-                    value={product.warranty.details}
-                    onChange={(e) => setProduct({ 
-                      ...product, 
-                      warranty: { 
-                        ...product.warranty, 
-                        details: e.target.value 
-                      } 
-                    })}
-                    rows="3"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Guarantee Section */}
-          <div>
-            <div className="flex items-center mb-4">
-              <input
-                type="checkbox"
-                checked={product.guarantee.available}
-                onChange={(e) => setProduct({ 
-                  ...product, 
-                  guarantee: { 
-                    ...product.guarantee, 
-                    available: e.target.checked 
-                  } 
-                })}
-                className="mr-2"
-              />
-              <label className="text-gray-700">Product has guarantee</label>
+              )}
             </div>
-            
-            {product.guarantee.available && (
-              <div className="pl-6">
-                <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Guarantee Period</label>
-                  <input
-                    className="border p-2 mb-4 w-full rounded"
+
+            {/* Guarantee */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="checkbox"
+                  id="guarantee"
+                  checked={product.guarantee.available}
+                  onChange={(e) => setProduct({
+                    ...product,
+                    guarantee: { ...product.guarantee, available: e.target.checked }
+                  })}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="guarantee" className="font-semibold text-gray-700 cursor-pointer">
+                  Product has guarantee
+                </label>
+              </div>
+
+              {product.guarantee.available && (
+                <div className="pl-6 space-y-4">
+                  <Input
+                    label="Guarantee Period"
                     placeholder="e.g., Lifetime, 3 years"
                     value={product.guarantee.period}
-                    onChange={(e) => setProduct({ 
-                      ...product, 
-                      guarantee: { 
-                        ...product.guarantee, 
-                        period: e.target.value 
-                      } 
+                    onChange={(e) => setProduct({
+                      ...product,
+                      guarantee: { ...product.guarantee, period: e.target.value }
                     })}
                   />
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Guarantee Details</label>
+                    <textarea
+                      value={product.guarantee.details}
+                      onChange={(e) => setProduct({
+                        ...product,
+                        guarantee: { ...product.guarantee, details: e.target.value }
+                      })}
+                      rows="3"
+                      placeholder="Describe what the guarantee covers..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Import Details */}
+          <Card title="Import Information" icon={<Globe className="w-5 h-5 text-purple-600" />}>
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                type="checkbox"
+                id="imported"
+                checked={product.importDetails.isImported}
+                onChange={(e) => setProduct({
+                  ...product,
+                  importDetails: { ...product.importDetails, isImported: e.target.checked }
+                })}
+                className="w-4 h-4"
+              />
+              <label htmlFor="imported" className="font-semibold text-gray-700 cursor-pointer">
+                This is an imported product
+              </label>
+            </div>
+
+            {product.importDetails.isImported && (
+              <div className="pl-6 space-y-4">
+                <Input
+                  label="Imported From"
+                  placeholder="e.g., Japan, USA"
+                  value={product.importDetails.country}
+                  onChange={(e) => setProduct({
+                    ...product,
+                    importDetails: { ...product.importDetails, country: e.target.value }
+                  })}
+                />
                 <div>
-                  <label className="block text-gray-700 text-sm font-bold mb-2">Guarantee Details</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Delivery Note</label>
                   <textarea
-                    className="border p-2 mb-4 w-full rounded"
-                    placeholder="Describe what the guarantee covers..."
-                    value={product.guarantee.details}
-                    onChange={(e) => setProduct({ 
-                      ...product, 
-                      guarantee: { 
-                        ...product.guarantee, 
-                        details: e.target.value 
-                      } 
+                    value={product.importDetails.deliveryNote}
+                    onChange={(e) => setProduct({
+                      ...product,
+                      importDetails: { ...product.importDetails, deliveryNote: e.target.value }
                     })}
-                    rows="3"
+                    rows="2"
+                    placeholder="e.g., May take 3-4 weeks for delivery"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </Card>
 
-        {/* Description & Additional Info */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Description & Additional Info</h2>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">Product Description</label>
-            <textarea
-              className="border p-2 mb-4 w-full rounded"
-              placeholder="Detailed description of the product..."
-              value={product.description}
-              onChange={(e) => setProduct({ ...product, description: e.target.value })}
-              rows="4"
-            />
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('details')} variant="outline">Back</Button>
+            <Button
+              onClick={handleUpdateProduct}
+              variant="success"
+              loading={isSubmitting}
+              icon={<Save className="w-4 h-4" />}
+              iconPosition="right"
+            >
+              {isSubmitting ? "Updating Product..." : "Save Changes"}
+            </Button>
           </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Additional Information</label>
-            <textarea
-              className="border p-2 mb-4 w-full rounded"
-              placeholder="Any additional information like usage instructions, materials, etc."
-              value={product.additionalInfo}
-              onChange={(e) => setProduct({ ...product, additionalInfo: e.target.value })}
-              rows="4"
-            />
-          </div>
-        </div>
-
-        {/* Product Images */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Product Images</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">Primary Image URL</label>
-              <input
-                className="border p-2 mb-2 w-full rounded"
-                placeholder="Primary Image URL"
-                value={product.image}
-                onChange={(e) => setProduct({ ...product, image: e.target.value })}
-              />
-              {product.image && (
-                <img src={product.image} alt="Primary" className="w-full h-40 object-contain border rounded" />
-              )}
-            </div>
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">Secondary Image URL</label>
-              <input
-                className="border p-2 mb-2 w-full rounded"
-                placeholder="Secondary Image URL"
-                value={product.image2}
-                onChange={(e) => setProduct({ ...product, image2: e.target.value })}
-              />
-              {product.image2 && (
-                <img src={product.image2} alt="Secondary" className="w-full h-40 object-contain border rounded" />
-              )}
-            </div>
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">Tertiary Image URL</label>
-              <input
-                className="border p-2 mb-2 w-full rounded"
-                placeholder="Tertiary Image URL"
-                value={product.image3}
-                onChange={(e) => setProduct({ ...product, image3: e.target.value })}
-              />
-              {product.image3 && (
-                <img src={product.image3} alt="Tertiary" className="w-full h-40 object-contain border rounded" />
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Visibility Settings */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-4 border-b pb-2">Visibility Settings</h2>
-          <div className="flex items-center mb-4">
-            <input
-              type="checkbox"
-              checked={product.showOnHome}
-              onChange={(e) => setProduct({ ...product, showOnHome: e.target.checked })}
-              className="mr-2"
-            />
-            <label className="text-gray-700">Show on Home Page</label>
-          </div>
-        </div>
-
-        <button
-          className={`w-full py-2 rounded text-white transition-all duration-300 ${
-            isSubmitting 
-              ? 'bg-gray-400 cursor-not-allowed' 
-              : submissionStatus === 'success' 
-                ? 'bg-green-500'
-                : submissionStatus === 'error'
-                  ? 'bg-red-500'
-                  : 'bg-blue-500 hover:bg-blue-600'
-          }`}
-          onClick={handleUpdateProduct}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Updating Product..." :
-           submissionStatus === 'success' ? "Product Updated!" :
-           submissionStatus === 'error' ? "Error! Try Again" : "Update Product"}
-        </button>
-      </div>
-    </div>
+        </motion.div>
+      )}
+    </motion.div>
   );
 };
 
