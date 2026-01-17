@@ -7,7 +7,7 @@ import { db } from "../firebase";
 import { formatCurrency, formatLakhs } from "../utils/formatUtils";
 import {
   Home, Package, Users, ShoppingBag, Tag, Image as ImageIcon,
-  Bell, LogOut, TrendingUp, DollarSign, ShoppingCart, Menu, X,
+  LogOut, TrendingUp, DollarSign, ShoppingCart, Menu, X,
   ChevronRight, Activity
 } from "react-feather";
 import { Card, LoadingSpinner, Badge } from "../components/ui";
@@ -627,9 +627,7 @@ const AdminHome = () => {
     { path: "/orders", icon: ShoppingBag, label: "Orders" },
     { path: "/products", icon: Package, label: "Products" },
     { path: "/users", icon: Users, label: "Users" },
-    { path: "/coupons", icon: Tag, label: "Coupons" },
     { path: "/banners", icon: ImageIcon, label: "Banners" },
-    { path: "/announcements", icon: Bell, label: "Announcements" }
   ];
 
   const isManageRoute = location.pathname !== '/';
@@ -824,8 +822,6 @@ const AdminHome = () => {
               whileTap={{ scale: 0.95 }}
               className="p-2 hover:bg-gray-100 rounded-lg relative"
             >
-              <Bell className="w-6 h-6 text-gray-600" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             </motion.button>
           </div>
         </div>
