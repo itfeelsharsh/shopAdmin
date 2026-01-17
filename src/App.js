@@ -4,7 +4,6 @@ import Users from "./pages/Users";
 import ProductManager from "./pages/ProductManagement/ProductManager";
 import AddProduct from "./pages/ProductManagement/AddProduct";
 import EditProduct from "./pages/ProductManagement/EditProduct";
-import CouponManager from "./pages/CouponManagement/CouponManager";
 import BannerManager from "./pages/BannerManagement/BannerManager";
 import AnnouncementManager from "./pages/AnnouncementManagement/AnnouncementManager";
 import Orders from "./pages/Orders";
@@ -43,7 +42,6 @@ function App() {
             <Route path="products" element={<ProductManager />} />
             <Route path="products/add" element={<AddProduct />} />
             <Route path="products/edit/:id" element={<EditProduct />} />
-            <Route path="coupons" element={<CouponManager />} />
             <Route path="banners" element={<BannerManager />} />
             <Route path="announcements" element={<AnnouncementManager />} />
           </Route>

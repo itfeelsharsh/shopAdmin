@@ -4,12 +4,13 @@ import { initializeFirestore } from "firebase/firestore";
 
 // Firebase configuration using environment variables only
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  apiKey: "AIzaSyDA1rJJknwbUuo771t-St5DRvWitLzoT6o",
+  authDomain: "online-shopping-0457.firebaseapp.com",
+  projectId: "online-shopping-0457",
+  storageBucket: "online-shopping-0457.firebasestorage.app",
+  messagingSenderId: "943482151038",
+  appId: "1:943482151038:web:a579405f33cbddef69f82f",
+  measurementId: "G-KR4DF5CJTF"
 };
 
 // Log configuration status for debugging

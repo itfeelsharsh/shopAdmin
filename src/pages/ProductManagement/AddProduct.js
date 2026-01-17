@@ -11,23 +11,35 @@ import { Button, Card, Input, Alert, Badge } from "../../components/ui";
 import { toast } from "react-toastify";
 
 const productTypes = [
-  'Notebooks and Journals',
-  'Pens and Pencils',
-  'Paper and Notepads',
-  'Planners and Calendars',
-  'Office Supplies',
-  'Art Supplies',
-  'Desk Accessories',
-  'Cards and Envelopes',
-  'Writing Accessories',
-  'Gift Wrap and Packaging',
+  "Men Clothing",
+  "Women Clothing",
+  "Kids Clothing",
+  "Footwear",
+  "Winter Wear",
+  "Sports Wear",
+  "Accessories",
+  "Ethnic Wear"
 ];
 
 const brands = [
-  'Camel', 'Faber-Castell', 'Staedtler', 'Doms', 'Camlin', 'Luxor',
-  'Monami', 'Schneider', 'Pentel', 'Pilot', 'Kokuyo', 'Nataraj',
-  'OHPen', 'Bic', 'Zebra', 'Stabilo',
+  'Nike',
+  'Adidas',
+  'Puma',
+  'Levi’s',
+  'Zara',
+  'H&M',
+  'Raymond',
+  'L’Oréal',
+  'Maybelline',
+  'Nivea',
+  'Dove',
+  'Lakmé',
+  'Calvin Klein',
+  'Reebok',
+  'Gucci',
+  'Pantene'
 ];
+
 
 /**
  * Enhanced Add Product Page with Modern UI
@@ -283,11 +295,10 @@ const AddProduct = () => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 whitespace-nowrap ${
-                  activeTab === tab.id
+                className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 whitespace-nowrap ${activeTab === tab.id
                     ? 'bg-blue-600 text-white shadow-lg'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                  }`}
               >
                 <Icon className="w-4 h-4" />
                 {tab.label}
@@ -396,13 +407,12 @@ const AddProduct = () => {
                         setSlugAvailability({ checked: false, available: false });
                       }}
                       placeholder="product-url-slug"
-                      className={`flex-1 px-4 py-2 border rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        slugAvailability.checked
+                      className={`flex-1 px-4 py-2 border rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${slugAvailability.checked
                           ? slugAvailability.available
                             ? 'border-green-500'
                             : 'border-red-500'
                           : 'border-l-0'
-                      }`}
+                        }`}
                     />
                   </div>
                   {errors.slug && <p className="text-red-500 text-sm mt-1">{errors.slug}</p>}
