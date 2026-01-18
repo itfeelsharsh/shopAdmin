@@ -29,15 +29,6 @@ const brands = [
   'Zara',
   'H&M',
   'Raymond',
-  'L’Oréal',
-  'Maybelline',
-  'Nivea',
-  'Dove',
-  'Lakmé',
-  'Calvin Klein',
-  'Reebok',
-  'Gucci',
-  'Pantene'
 ];
 
 

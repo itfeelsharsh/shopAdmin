@@ -11,35 +11,24 @@ import {
 import { db } from "../firebase";
 
 const productTypes = [
-  "Notebooks and Journals",
-  "Pens and Pencils",
-  "Paper and Notepads",
-  "Planners and Calendars",
-  "Office Supplies",
-  "Art Supplies",
-  "Desk Accessories",
-  "Cards and Envelopes",
-  "Writing Accessories",
-  "Gift Wrap and Packaging",
+  "Men Clothing",
+  "Women Clothing",
+  "Kids Clothing",
+  "Footwear",
+  "Winter Wear",
+  "Sports Wear",
+  "Accessories",
+  "Ethnic Wear",
 ];
 
 const brands = [
-  "Camel",
-  "Faber-Castell",
-  "Staedtler",
-  "Doms",
-  "Camlin",
-  "Luxor",
-  "Monami",
-  "Schneider",
-  "Pentel",
-  "Pilot",
-  "Kokuyo",
-  "Nataraj",
-  "OHPen",
-  "Bic",
-  "Zebra",
-  "Stabilo",
+   'Nike',
+  'Adidas',
+  'Puma',
+  'Levi’s',
+  'Zara',
+  'H&M',
+  'Raymond',
 ];
 
 const Products = () => {
