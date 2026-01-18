@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from "react";
+
 import {
   collection,
   getDocs,
@@ -14,22 +15,17 @@ const productTypes = [
   "Men Clothing",
   "Women Clothing",
   "Kids Clothing",
-  "Footwear",
-  "Winter Wear",
-  "Sports Wear",
-  "Accessories",
-  "Ethnic Wear",
+  "Footwear"
 ];
 
 const brands = [
-   'Nike',
-  'Adidas',
-  'Puma',
-  'Levi’s',
-  'Zara',
-  'H&M',
-  'Raymond',
+  "Nike",
+  "Adidas",
+  "Zara",
+  "H&M",
+  "Levi’s"
 ];
+
 
 const Products = () => {
   const [products, setProducts] = useState([]);
