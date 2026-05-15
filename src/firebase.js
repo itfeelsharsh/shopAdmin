@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore"; 
+import { getMessaging } from "firebase/messaging";
 
 // Firebase configuration using environment variables only
 const firebaseConfig = {
@@ -23,7 +24,7 @@ console.log('Firebase Configuration Status:', {
 });
 
 // Initialize Firebase app with error handling
-let app, auth, db;
+let app, auth, db, messaging;
 
 try {
   // Check if all required config values are present
@@ -47,6 +48,9 @@ try {
     useFetchStreams: false
   }); 
   console.log('Firestore initialized successfully');
+
+  messaging = getMessaging(app);
+  console.log('Firebase messaging initialized successfully');
 
   // Set auth persistence with error handling
   setPersistence(auth, browserLocalPersistence)
@@ -76,6 +80,10 @@ try {
       })
     })
   };
+
+  messaging = {
+    getToken: () => Promise.reject(new Error('Firebase not initialized'))
+  };
 }
 
-export { auth, db }; 
+export { auth, db, messaging }; 

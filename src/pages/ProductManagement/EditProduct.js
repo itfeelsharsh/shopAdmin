@@ -9,6 +9,7 @@ import {
 } from "react-feather";
 import { Button, Card, Input, Alert, Badge, LoadingSpinner } from "../../components/ui";
 import { toast } from "react-toastify";
+import { sendBroadcastNotification } from "../../utils/notificationService";
 
 const productTypes = [
   'Notebooks and Journals', 'Pens and Pencils', 'Paper and Notepads',
@@ -37,6 +38,7 @@ const EditProduct = () => {
   const [specKey, setSpecKey] = useState("");
   const [specValue, setSpecValue] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notifyUsers, setNotifyUsers] = useState(false);
 
   const tabs = [
     { id: 'basic', label: 'Basic Info', icon: Package },
@@ -94,6 +96,14 @@ const EditProduct = () => {
       setIsSubmitting(true);
 
       const productRef = doc(db, "products", id);
+      
+      // Get the original product data to compare changes
+      const oldProductDoc = await getDoc(productRef);
+      const oldProduct = oldProductDoc.data();
+      
+      const priceChanged = Number(oldProduct.sellingPrice) !== Number(product.sellingPrice);
+      const stockAdded = Number(oldProduct.stock) === 0 && Number(product.stock) > 0;
+
       const updateData = {
         ...product,
         sellingPrice: Number(product.sellingPrice || product.price),
@@ -104,6 +114,30 @@ const EditProduct = () => {
       };
 
       await updateDoc(productRef, updateData);
+      
+      // Handle notifications
+      if (notifyUsers && (priceChanged || stockAdded)) {
+        let title = "";
+        let body = "";
+        
+        if (priceChanged && Number(product.sellingPrice) < Number(oldProduct.sellingPrice)) {
+          title = "Price Drop Alert! 📉";
+          body = `${product.name} is now available at a lower price of ₹${product.sellingPrice}!`;
+        } else if (stockAdded) {
+          title = "Back in Stock! 📦";
+          body = `Great news! ${product.name} is back in stock. Grab yours before it's gone!`;
+        }
+
+        if (title) {
+          await sendBroadcastNotification({
+            title,
+            body,
+            link: `/product/${id}`,
+            type: 'product_update'
+          });
+          toast.info("Notifications sent to users!");
+        }
+      }
 
       toast.success("Product updated successfully!");
       setTimeout(() => {
@@ -348,6 +382,26 @@ const EditProduct = () => {
                   />
                 </div>
               )}
+
+              <div className="col-span-1 md:col-span-2 mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="notifyUsers"
+                    checked={notifyUsers}
+                    onChange={(e) => setNotifyUsers(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <label htmlFor="notifyUsers" className="font-bold text-gray-900 cursor-pointer">
+                      Notify users about price drop or restock
+                    </label>
+                    <p className="text-sm text-gray-600">
+                      Send a push notification to all users who have this product in their wishlist or have enabled notifications.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </Card>
 

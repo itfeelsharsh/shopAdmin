@@ -20,7 +20,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { collection, query, orderBy, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -30,7 +30,9 @@ import AdminOrderService, {
   ORDER_STATUSES, 
   ORDER_PRIORITIES, 
   SHIPPING_CARRIERS 
-} from '../utils/orderService';
+} from "../utils/orderService";
+import { resendOrderConfirmationEmail } from "../utils/emailService";
+import { sendUserNotification } from "../utils/notificationService";
 import { formatCurrency, formatIndianNumber } from '../utils/formatUtils';
 
 /**
@@ -88,8 +90,16 @@ function Orders() {
   const [analyticsData, setAnalyticsData] = useState(null);   // Analytics data cache
   const [analyticsLoading, setAnalyticsLoading] = useState(false); // Analytics loading state
   
-  // Note: Pagination state removed as it's not currently implemented in the UI
-  // Future enhancement: Add pagination for large datasets
+  // Pagination state management
+  const [pagination, setPagination] = useState({
+    limit: 10,
+    lastDoc: null,
+    hasMore: false,
+    currentPage: 1
+  });
+
+  const [isResendingEmail, setIsResendingEmail] = useState(false);
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
 
   /**
    * Comprehensive order status configuration with enhanced styling and workflow
@@ -213,128 +223,63 @@ function Orders() {
    * Comprehensive order fetching function
    * Uses the reliable approach from the original code with enhanced error handling
    */
-  const fetchOrders = useCallback(async () => {
-    // Debounce rapid successive calls to prevent infinite loops
+  const fetchOrders = useCallback(async (loadMore = false) => {
+    // Debounce rapid successive calls
     const now = Date.now();
-    if (now - lastFetchTimeRef.current < FETCH_DEBOUNCE_MS) {
-      console.log('📥 Orders: Skipping fetch due to debounce');
+    if (now - lastFetchTimeRef.current < FETCH_DEBOUNCE_MS && !loadMore) {
       return;
     }
     lastFetchTimeRef.current = now;
-    
-    console.log('📥 Orders: Fetching orders from backend using direct Firestore query');
     
     try {
       setLoading(true);
       setError(null);
       
-      // Use the reliable direct Firestore approach from the original code
-      // Try multiple field names for ordering to handle different data structures
-      let ordersData = [];
-      let querySuccessful = false;
-      
-      // Try ordering by 'orderDate' first (as in original code)
-      try {
-        console.log('📥 Orders: Attempting query with orderBy("orderDate", "desc")');
-        const ordersQuery = query(collection(db, "orders"), orderBy("orderDate", "desc"));
-        const ordersSnapshot = await getDocs(ordersQuery);
-        
-        ordersData = ordersSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        querySuccessful = true;
-        console.log(`✅ Orders: Successfully fetched ${ordersData.length} orders using 'orderDate' field`);
-      } catch (orderDateError) {
-        console.warn('⚠️ Orders: Failed to order by "orderDate", trying "createdAt":', orderDateError);
-        
-        // Fallback to 'createdAt' ordering
-        try {
-          console.log('📥 Orders: Attempting query with orderBy("createdAt", "desc")');
-          const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-          const ordersSnapshot = await getDocs(ordersQuery);
-          
-          ordersData = ordersSnapshot.docs.map(doc => {
-            const data = doc.data();
-            // Log sample order data to help debug field structures
-            if (ordersData.length === 0) {
-              console.log('📊 Orders: Sample order data structure:', {
-                id: doc.id,
-                total: data.total,
-                amount: data.amount,
-                financials: data.financials,
-                payment: data.payment,
-                items: data.items?.length || 0
-              });
-            }
-            return {
-              id: doc.id,
-              ...data
-            };
-          });
-          
-          querySuccessful = true;
-          console.log(`✅ Orders: Successfully fetched ${ordersData.length} orders using 'createdAt' field`);
-        } catch (createdAtError) {
-          console.warn('⚠️ Orders: Failed to order by "createdAt", trying without ordering:', createdAtError);
-          
-          // Final fallback: no ordering
-          try {
-            console.log('📥 Orders: Attempting query without ordering');
-            const ordersSnapshot = await getDocs(collection(db, "orders"));
-            
-            ordersData = ordersSnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
-            
-            // Sort manually by available date field
-            ordersData.sort((a, b) => {
-              const dateA = a.orderDate || a.createdAt?.toDate?.() || a.createdAt || new Date(0);
-              const dateB = b.orderDate || b.createdAt?.toDate?.() || b.createdAt || new Date(0);
-              return new Date(dateB) - new Date(dateA);
-            });
-            
-            querySuccessful = true;
-            console.log(`✅ Orders: Successfully fetched ${ordersData.length} orders without ordering (sorted manually)`);
-          } catch (finalError) {
-            throw new Error(`Failed all query attempts: ${finalError.message}`);
-          }
+      const result = await AdminOrderService.getAllOrders(filters, {
+        limit: pagination.limit,
+        lastDoc: loadMore ? pagination.lastDoc : null
+      });
+
+      if (result.success) {
+        if (loadMore) {
+          setOrders(prev => [...prev, ...result.orders]);
+        } else {
+          setOrders(result.orders);
         }
-      }
-      
-      if (querySuccessful) {
-        setOrders(ordersData);
         
-        console.log(`✅ Orders: Successfully loaded ${ordersData.length} orders`);
-        
-        // Show success message only on manual refresh
-        if (ordersData.length > 0) {
-          // Safely call toast only if it's available
-          if (typeof toast === 'object' && toast !== null && typeof toast.success === 'function') {
-            toast.success(`Refreshed ${ordersData.length} orders`);
-          }
+        setPagination(prev => ({
+          ...prev,
+          lastDoc: result.lastDoc,
+          hasMore: result.hasMore,
+          currentPage: loadMore ? prev.currentPage + 1 : 1
+        }));
+
+        if (!loadMore && result.orders.length > 0) {
+          toast.success(`Refreshed ${result.orders.length} orders`);
         }
       } else {
-        throw new Error('Failed to fetch orders with all attempted methods');
+        throw new Error(result.error);
       }
-    } catch (error) {
-      console.error('❌ Orders: Error fetching orders:', error);
-      setError(error.message);
-      // Safely call toast only if it's available
-      if (typeof toast === 'object' && toast !== null && typeof toast.error === 'function') {
-        toast.error(`Failed to load orders: ${error.message}`);
-      }
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      setError(err.message);
+      toast.error(`Failed to load orders: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  }, []); // Remove all dependencies to prevent infinite loops
+  }, [filters, pagination.limit, pagination.lastDoc]);
   
   // Update the ref whenever fetchOrders changes
   useEffect(() => {
     fetchOrdersRef.current = fetchOrders;
   }, [fetchOrders]);
+
+  // Load more function
+  const handleLoadMore = () => {
+    if (pagination.hasMore && !loading) {
+      fetchOrders(true);
+    }
+  };
 
   /**
    * Extract order total from various possible fields
@@ -590,15 +535,53 @@ function Orders() {
       if (typeof toast === 'object' && toast !== null && typeof toast.success === 'function') {
         toast.success(`Order ${orderData.orderId || orderId} ${newStatus.toLowerCase()} successfully`);
       }
-      
     } catch (error) {
-      console.error('❌ Orders: Error updating order status:', error);
-      // Safely call toast only if it's available
-      if (typeof toast === 'object' && toast !== null && typeof toast.error === 'function') {
-        toast.error(`Failed to update order: ${error.message}`);
-      }
+      console.error('Error updating order status:', error);
+      toast.error(error.message);
     } finally {
       setProcessingAction(false);
+    }
+  };
+
+  const handleResendEmail = async (order) => {
+    try {
+      setIsResendingEmail(true);
+      const user = {
+        email: order.userEmail,
+        displayName: order.userName || order.shippingAddress?.name || 'Customer'
+      };
+      const result = await resendOrderConfirmationEmail(order, user);
+      if (result.success) {
+        toast.success("Order confirmation email resent!");
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      toast.error(`Failed to resend email: ${error.message}`);
+    } finally {
+      setIsResendingEmail(false);
+    }
+  };
+
+  const handleSendNotification = async (order, type = 'status_update') => {
+    try {
+      setIsSendingNotification(true);
+      const statusLabel = ORDER_STATUS_CONFIG[order.status]?.label || order.status;
+      const result = await sendUserNotification(order.userId, {
+        title: `Order Update: ${statusLabel}`,
+        body: `Your order #${order.orderId || order.id} status has been updated to ${statusLabel}.`,
+        link: `/account/orders/${order.id}`,
+        type
+      });
+      if (result.success) {
+        toast.success("Notification sent to user!");
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      toast.error(`Failed to send notification: ${error.message}`);
+    } finally {
+      setIsSendingNotification(false);
     }
   };
 
@@ -1470,21 +1453,37 @@ function Orders() {
         )}
       </div>
 
-      {/* Results Summary */}
-      {filteredOrders.length > 0 && (
-        <div className="mt-6 px-6 py-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between text-sm">
-            <div className="text-gray-600">
-              Showing <span className="font-semibold text-gray-900">{filteredOrders.length}</span> of <span className="font-semibold text-gray-900">{orders.length}</span> orders
-            </div>
-            <div className="text-gray-500">
-              {orders.length > filteredOrders.length && (
-                <span>{orders.length - filteredOrders.length} orders hidden by filters</span>
-              )}
-            </div>
+      {/* Pagination & Results Summary */}
+      <div className="mt-6 px-6 py-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-sm text-gray-600">
+            Showing <span className="font-semibold text-gray-900">{orders.length}</span> orders
+          </div>
+          
+          <div className="flex items-center gap-4">
+            {pagination.hasMore && (
+              <button
+                onClick={handleLoadMore}
+                disabled={loading}
+                className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+              >
+                {loading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent"></div>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                )}
+                Load More Orders
+              </button>
+            )}
+          </div>
+          
+          <div className="text-sm text-gray-500">
+            Page {pagination.currentPage}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Order Details/Shipping Modal */}
       {isModalOpen && selectedOrder && (
@@ -1964,6 +1963,38 @@ function Orders() {
                   {/* Admin Actions */}
                   <div className="flex justify-end items-center pt-6 border-t border-gray-200">
                     <div className="flex gap-2">
+                      <button
+                        onClick={() => handleResendEmail(selectedOrder)}
+                        disabled={isResendingEmail}
+                        className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-2"
+                        title="Resend order confirmation email"
+                      >
+                        {isResendingEmail ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                        Resend Email
+                      </button>
+
+                      <button
+                        onClick={() => handleSendNotification(selectedOrder)}
+                        disabled={isSendingNotification}
+                        className="px-4 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors flex items-center gap-2"
+                        title="Send push notification about status"
+                      >
+                        {isSendingNotification ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-600 border-t-transparent"></div>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                          </svg>
+                        )}
+                        Notify User
+                      </button>
+
                       <button
                         onClick={() => {
                           setIsModalOpen(false);

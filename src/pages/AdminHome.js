@@ -2,13 +2,13 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
-import { collection, query, getDocs, orderBy, limit } from "firebase/firestore";
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from "../firebase";
 import { formatCurrency, formatLakhs } from "../utils/formatUtils";
 import {
   Home, Package, Users, ShoppingBag, Tag, Image as ImageIcon,
   Bell, LogOut, TrendingUp, DollarSign, ShoppingCart, Menu, X,
-  ChevronRight, Activity
+  ChevronRight, Activity, Smartphone
 } from "react-feather";
 import { Card, LoadingSpinner, Badge } from "../components/ui";
 
@@ -39,8 +39,8 @@ const StatCard = ({ title, value, icon: Icon, color, trend, loading }) => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      whileHover={{ y: -5, shadow: '0 20px 40px rgba(0,0,0,0.1)' }}
-      className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:border-gray-200 transition-all duration-300 overflow-hidden relative"
+      whileHover={{ y: -4 }}
+      className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:border-blue-100 hover:shadow-md transition-all duration-300 overflow-hidden relative"
     >
       {/* Background gradient decoration */}
       <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors.gradient} opacity-5 rounded-full -mr-16 -mt-16`} />
@@ -51,13 +51,9 @@ const StatCard = ({ title, value, icon: Icon, color, trend, loading }) => {
           {loading ? (
             <div className="h-8 w-24 bg-gray-200 animate-pulse rounded" />
           ) : (
-            <motion.h3
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="text-3xl font-bold text-gray-900"
-            >
+            <h3 className="text-3xl font-bold text-gray-900">
               {value}
-            </motion.h3>
+            </h3>
           )}
           {trend && (
             <motion.div
@@ -71,13 +67,11 @@ const StatCard = ({ title, value, icon: Icon, color, trend, loading }) => {
             </motion.div>
           )}
         </div>
-        <motion.div
-          whileHover={{ rotate: 360, scale: 1.1 }}
-          transition={{ duration: 0.5 }}
-          className={`${colors.bg} p-4 rounded-xl`}
+        <div
+          className={`${colors.bg} p-4 rounded-xl transition-transform duration-300`}
         >
           <Icon className={`w-6 h-6 ${colors.icon}`} />
-        </motion.div>
+        </div>
       </div>
     </motion.div>
   );
@@ -126,13 +120,115 @@ const AdminDashboard = () => {
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        await Promise.all([
-          fetchOrderStatistics(),
-          fetchMonthlyRevenue(),
-          fetchProductPerformance(),
-          fetchOrderStatusDistribution(),
-          fetchUserStatistics()
+        // Fetch all necessary data in parallel
+        const [ordersSnapshot, usersSnapshot] = await Promise.all([
+          getDocs(collection(db, "orders")),
+          getDocs(collection(db, "users"))
         ]);
+
+        const now = new Date();
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+        // Process Orders Data
+        let totalRevenue = 0;
+        let monthlyRevenueTotal = 0;
+        const statusCounts = {};
+        const productSales = {};
+        const monthlyData = {};
+
+        // Initialize last 6 months for revenue chart
+        for (let i = 0; i < 6; i++) {
+          const month = new Date();
+          month.setMonth(now.getMonth() - i);
+          const monthKey = `${month.getFullYear()}-${month.getMonth() + 1}`;
+          const monthName = month.toLocaleString('default', { month: 'short' });
+          monthlyData[monthKey] = { month: monthName, year: month.getFullYear(), revenue: 0, orders: 0 };
+        }
+
+        const orders = ordersSnapshot.docs.map(doc => {
+          const data = doc.data();
+          const orderTotal = data.total || data.totalAmount || data.amount || 0;
+          const orderDate = data.orderDate ? new Date(data.orderDate) : (data.createdAt ? new Date(data.createdAt.seconds * 1000) : null);
+          const status = data.status || "Unknown";
+
+          // Overall Stats
+          totalRevenue += orderTotal;
+          if (orderDate && orderDate >= firstDayOfMonth) {
+            monthlyRevenueTotal += orderTotal;
+          }
+
+          // Status Distribution
+          if (!statusCounts[status]) {
+            statusCounts[status] = { status, count: 0 };
+          }
+          statusCounts[status].count += 1;
+
+          // Product Performance
+          if (data.items && Array.isArray(data.items)) {
+            data.items.forEach(item => {
+              if (!productSales[item.name]) {
+                productSales[item.name] = { name: item.name, quantity: 0, revenue: 0 };
+              }
+              productSales[item.name].quantity += item.quantity || 0;
+              productSales[item.name].revenue += (item.price * item.quantity) || 0;
+            });
+          }
+
+          // Monthly Revenue Chart Data
+          if (orderDate && orderDate >= sixMonthsAgo) {
+            const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
+            if (monthlyData[monthKey]) {
+              monthlyData[monthKey].revenue += orderTotal;
+              monthlyData[monthKey].orders += 1;
+            }
+          }
+
+          return { id: doc.id, ...data, orderDate };
+        });
+
+        // Finalize Stat Arrays
+        const monthlyArray = Object.values(monthlyData).sort((a, b) => {
+          return a.year === b.year
+            ? new Date(0, a.month, 0) - new Date(0, b.month, 0)
+            : a.year - b.year;
+        });
+
+        const productArray = Object.values(productSales)
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 5);
+
+        // Process User Data
+        let newUsersCount = 0;
+        usersSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.createdAt && new Date(data.createdAt.seconds * 1000) >= firstDayOfMonth) {
+            newUsersCount++;
+          }
+        });
+
+        // Get Recent Orders (Sort by date)
+        const recentOrders = [...orders]
+          .sort((a, b) => (b.orderDate || 0) - (a.orderDate || 0))
+          .slice(0, 5);
+
+        // Update All States
+        setOrderStats({
+          totalOrders: orders.length,
+          totalRevenue: totalRevenue,
+          monthlyRevenue: monthlyRevenueTotal,
+          averageOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0,
+          recentOrders: recentOrders
+        });
+        setMonthlyRevenue(monthlyArray);
+        setProductPerformance(productArray);
+        setStatusDistribution(Object.values(statusCounts));
+        setUserStats({
+          totalUsers: usersSnapshot.docs.length,
+          newUsersThisMonth: newUsersCount
+        });
+
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
         toast.error("Failed to load dashboard data");
@@ -143,190 +239,6 @@ const AdminDashboard = () => {
 
     fetchDashboardData();
   }, []);
-
-  const fetchOrderStatistics = async () => {
-    try {
-      const ordersRef = collection(db, "orders");
-      const ordersSnapshot = await getDocs(ordersRef);
-
-      let totalRevenue = 0;
-      let monthlyRevenue = 0;
-      const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const orders = ordersSnapshot.docs.map(doc => {
-        const data = doc.data();
-        const orderTotal = data.total || data.totalAmount || data.amount || 0;
-        totalRevenue += orderTotal;
-
-        // Calculate this month's revenue
-        const orderDate = data.orderDate ? new Date(data.orderDate) : null;
-        if (orderDate && orderDate >= firstDayOfMonth) {
-          monthlyRevenue += orderTotal;
-        }
-
-        return { id: doc.id, ...data };
-      });
-
-      const recentOrdersQuery = query(
-        collection(db, "orders"),
-        orderBy("orderDate", "desc"),
-        limit(5)
-      );
-      const recentOrdersSnapshot = await getDocs(recentOrdersQuery);
-      const recentOrders = recentOrdersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      setOrderStats({
-        totalOrders: orders.length,
-        totalRevenue: totalRevenue,
-        monthlyRevenue: monthlyRevenue,
-        averageOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0,
-        recentOrders: recentOrders
-      });
-
-      console.log("Order Stats:", {
-        totalOrders: orders.length,
-        totalRevenue,
-        monthlyRevenue,
-        averageOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0
-      });
-    } catch (error) {
-      console.error("Error fetching order statistics:", error);
-      toast.error("Failed to load order statistics");
-    }
-  };
-
-  const fetchMonthlyRevenue = async () => {
-    try {
-      const now = new Date();
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(now.getMonth() - 6);
-
-      const ordersRef = collection(db, "orders");
-      const ordersSnapshot = await getDocs(ordersRef);
-
-      const monthlyData = {};
-
-      for (let i = 0; i < 6; i++) {
-        const month = new Date();
-        month.setMonth(now.getMonth() - i);
-        const monthKey = `${month.getFullYear()}-${month.getMonth() + 1}`;
-        const monthName = month.toLocaleString('default', { month: 'short' });
-        monthlyData[monthKey] = { month: monthName, year: month.getFullYear(), revenue: 0, orders: 0 };
-      }
-
-      ordersSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        const orderDate = new Date(data.orderDate);
-
-        if (orderDate >= sixMonthsAgo) {
-          const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
-
-          if (monthlyData[monthKey]) {
-            monthlyData[monthKey].revenue += data.total || 0;
-            monthlyData[monthKey].orders += 1;
-          }
-        }
-      });
-
-      const monthlyArray = Object.values(monthlyData).sort((a, b) => {
-        return a.year === b.year
-          ? new Date(0, a.month, 0) - new Date(0, b.month, 0)
-          : a.year - b.year;
-      });
-
-      setMonthlyRevenue(monthlyArray);
-    } catch (error) {
-      console.error("Error fetching monthly revenue:", error);
-    }
-  };
-
-  const fetchProductPerformance = async () => {
-    try {
-      const ordersRef = collection(db, "orders");
-      const ordersSnapshot = await getDocs(ordersRef);
-
-      const productSales = {};
-
-      ordersSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (data.items && Array.isArray(data.items)) {
-          data.items.forEach(item => {
-            if (!productSales[item.name]) {
-              productSales[item.name] = {
-                name: item.name,
-                quantity: 0,
-                revenue: 0
-              };
-            }
-            productSales[item.name].quantity += item.quantity || 0;
-            productSales[item.name].revenue += (item.price * item.quantity) || 0;
-          });
-        }
-      });
-
-      const productArray = Object.values(productSales)
-        .sort((a, b) => b.quantity - a.quantity)
-        .slice(0, 5);
-
-      setProductPerformance(productArray);
-    } catch (error) {
-      console.error("Error fetching product performance:", error);
-    }
-  };
-
-  const fetchOrderStatusDistribution = async () => {
-    try {
-      const ordersRef = collection(db, "orders");
-      const ordersSnapshot = await getDocs(ordersRef);
-
-      const statusCounts = {};
-
-      ordersSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        const status = data.status || "Unknown";
-
-        if (!statusCounts[status]) {
-          statusCounts[status] = { status, count: 0 };
-        }
-        statusCounts[status].count += 1;
-      });
-
-      const statusArray = Object.values(statusCounts);
-
-      setStatusDistribution(statusArray);
-    } catch (error) {
-      console.error("Error fetching status distribution:", error);
-    }
-  };
-
-  const fetchUserStatistics = async () => {
-    try {
-      const usersRef = collection(db, "users");
-      const usersSnapshot = await getDocs(usersRef);
-
-      const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      let newUsersCount = 0;
-
-      usersSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (data.createdAt && new Date(data.createdAt.seconds * 1000) >= firstDayOfMonth) {
-          newUsersCount++;
-        }
-      });
-
-      setUserStats({
-        totalUsers: usersSnapshot.docs.length,
-        newUsersThisMonth: newUsersCount
-      });
-    } catch (error) {
-      console.error("Error fetching user statistics:", error);
-    }
-  };
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -356,17 +268,17 @@ const AdminDashboard = () => {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
       className="space-y-6"
     >
       {/* Welcome Banner */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-xl"
+        className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-xl border border-slate-700"
       >
-        <h1 className="text-3xl font-bold mb-2">Welcome Back, Admin! 👋</h1>
-        <p className="text-blue-100">Here's what's happening with your store today</p>
+        <h1 className="text-3xl font-bold mb-2">Dashboard Overview</h1>
+        <p className="text-slate-400">Manage your store operations and monitor performance metrics.</p>
       </motion.div>
 
       {/* Stats Cards */}
@@ -629,7 +541,8 @@ const AdminHome = () => {
     { path: "/users", icon: Users, label: "Users" },
     { path: "/coupons", icon: Tag, label: "Coupons" },
     { path: "/banners", icon: ImageIcon, label: "Banners" },
-    { path: "/announcements", icon: Bell, label: "Announcements" }
+    { path: "/announcements", icon: Bell, label: "Announcements" },
+    { path: "/notifications", icon: Smartphone, label: "Push Notifications" }
   ];
 
   const isManageRoute = location.pathname !== '/';

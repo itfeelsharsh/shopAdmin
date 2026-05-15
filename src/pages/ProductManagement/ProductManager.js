@@ -720,9 +720,9 @@ const ProductManager = () => {
           {filteredProducts.map((product, index) => (
             <motion.div
               key={product.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.05 * index }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 * (index % 10) }}
               className="relative"
             >
               <Card hoverable className="h-full">
