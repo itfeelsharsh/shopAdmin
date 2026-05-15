@@ -22,7 +22,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { toast, ToastContainer } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Import the enhanced admin order service and utilities
@@ -941,17 +941,7 @@ function Orders() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Toast notification container */}
-      <ToastContainer 
-        position="top-right" 
-        autoClose={3000} 
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
+
       
       {/* Header Section with Title and Action Buttons */}
       <div className="mb-8">

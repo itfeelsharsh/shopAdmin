@@ -212,7 +212,7 @@ class AdminOrderService {
       }
       
       // Apply priority filter for workflow management
-      if (filters.priority) {
+      if (filters.priority && filters.priority !== 'all') {
         ordersQuery = query(ordersQuery, where("priority", "==", filters.priority));
       }
       
