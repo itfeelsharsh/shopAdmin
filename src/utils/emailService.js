@@ -65,33 +65,50 @@ export const sendEmail = async (emailData) => {
 };
 
 /**
- * Generates HTML for order confirmation (Simplified for now, can be expanded)
+ * Generates HTML for order confirmation
  */
 const generateOrderConfirmationHTML = (order, user) => {
-  // This should ideally be the same template as in the main shop
-  // For brevity, I'm using a placeholder but in a real scenario, 
-  // you'd copy the full generateOrderConfirmationHTML function from shop's emailService.js
-  return `
-    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
-      <h1 style="color: #111;">Order Confirmed</h1>
-      <p>Hello ${user.displayName || user.userName || 'Customer'},</p>
-      <p>Your order <strong>#${order.orderId}</strong> has been confirmed.</p>
-      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-      <h3>Order Details</h3>
-      <table width="100%">
-        ${order.items.map(item => `
-          <tr>
-            <td style="padding: 10px 0;">${item.name} x ${item.quantity}</td>
-            <td style="text-align: right;">₹${item.price * item.quantity}</td>
-          </tr>
-        `).join('')}
-      </table>
-      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-      <div style="text-align: right;">
-        <p><strong>Total: ₹${order.totalAmount || order.total || 0}</strong></p>
-      </div>
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const itemsHTML = order.items.map(item => `
+    <tr>
+      <td style="padding: 10px 0; border-bottom: 1px solid #eee;">
+        <p style="margin: 0; font-weight: 600;">${item.name}</p>
+        <p style="margin: 0; color: #666; font-size: 14px;">Qty: ${item.quantity}</p>
+      </td>
+      <td style="text-align: right; border-bottom: 1px solid #eee;">${formatCurrency(item.price * item.quantity)}</td>
+    </tr>
+  `).join('');
+
+  return \`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Order Confirmation</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #f9fafb; margin: 0; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 30px;">
+    <h1 style="color: #111827; margin-top: 0;">Order Confirmed</h1>
+    <p style="color: #4b5563;">Hello \${user.displayName || user.userName || 'Customer'},</p>
+    <p style="color: #4b5563;">Your order <strong>#\${order.orderId}</strong> has been confirmed and is processing.</p>
+    
+    <h3 style="color: #111827; margin-top: 30px; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px;">Order Details</h3>
+    <table width="100%" style="border-collapse: collapse; margin-bottom: 20px;">
+      \${itemsHTML}
+    </table>
+    
+    <div style="text-align: right; margin-top: 20px;">
+      <p style="font-size: 18px; color: #111827;"><strong>Total: \${formatCurrency(order.totalAmount || order.total || 0)}</strong></p>
     </div>
-  `;
+  </div>
+</body>
+</html>\`;
 };
 
 /**
@@ -102,7 +119,7 @@ export const resendOrderConfirmationEmail = async (order, user) => {
     const emailBody = generateOrderConfirmationHTML(order, user);
     const emailData = {
       to: user.email,
-      subject: `Resending: KamiKoto Order Confirmation #${order.orderId}`,
+      subject: `KamiKoto - Order Confirmation #${order.orderId}`,
       body: emailBody,
     };
     return await sendEmail(emailData);
