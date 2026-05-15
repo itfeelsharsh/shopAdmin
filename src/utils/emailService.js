@@ -86,7 +86,7 @@ const generateOrderConfirmationHTML = (order, user) => {
     </tr>
   `).join('');
 
-  return \`<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -95,20 +95,20 @@ const generateOrderConfirmationHTML = (order, user) => {
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #f9fafb; margin: 0; padding: 20px;">
   <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 30px;">
     <h1 style="color: #111827; margin-top: 0;">Order Confirmed</h1>
-    <p style="color: #4b5563;">Hello \${user.displayName || user.userName || 'Customer'},</p>
-    <p style="color: #4b5563;">Your order <strong>#\${order.orderId}</strong> has been confirmed and is processing.</p>
+    <p style="color: #4b5563;">Hello ${user.displayName || user.userName || 'Customer'},</p>
+    <p style="color: #4b5563;">Your order <strong>#${order.orderId}</strong> has been confirmed and is processing.</p>
     
     <h3 style="color: #111827; margin-top: 30px; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px;">Order Details</h3>
     <table width="100%" style="border-collapse: collapse; margin-bottom: 20px;">
-      \${itemsHTML}
+      ${itemsHTML}
     </table>
     
     <div style="text-align: right; margin-top: 20px;">
-      <p style="font-size: 18px; color: #111827;"><strong>Total: \${formatCurrency(order.totalAmount || order.total || 0)}</strong></p>
+      <p style="font-size: 18px; color: #111827;"><strong>Total: ${formatCurrency(order.totalAmount || order.total || 0)}</strong></p>
     </div>
   </div>
 </body>
-</html>\`;
+</html>`;
 };
 
 /**
