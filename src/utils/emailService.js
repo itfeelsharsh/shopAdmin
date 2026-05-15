@@ -11,15 +11,10 @@ import featureConfig from './featureConfig';
  * Get the base URL for the API functions
  */
 const getApiFunctionBaseUrl = () => {
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  if (isDevelopment) {
-    return '/api';
-  } else {
-    // In production, the admin might be on a subdomain. 
-    // If functions are on the main domain, we might need a full URL.
-    // For now, assuming same domain or handled by proxy.
-    return '';
-  }
+  // Always use the production Cloudflare Functions domain.
+  // The local React development server (npm run start) on port 3000 
+  // does not execute Cloudflare functions natively without `wrangler pages dev`.
+  return 'https://kamikoto.qzz.io/api';
 };
 
 /**

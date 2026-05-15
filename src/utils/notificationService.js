@@ -6,13 +6,10 @@ import { db } from '../firebase';
  * Handles sending push notifications to users via Cloudflare API
  */
 const getApiFunctionBaseUrl = () => {
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  if (isDevelopment) {
-    return '/api';
-  } else {
-    // Replace with your actual production API domain if different
-    return ''; 
-  }
+  // Always use the production Cloudflare Functions domain.
+  // The local React development server (npm run start) on port 3000 
+  // does not execute Cloudflare functions natively without `wrangler pages dev`.
+  return 'https://kamikoto.qzz.io/api';
 };
 
 /**
