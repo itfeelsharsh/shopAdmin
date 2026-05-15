@@ -8,7 +8,6 @@
     "@testing-library/user-event": "^13.5.0",
     "ajv": "^8.17.1",
     "autoprefixer": "^10.4.20",
-    "caniuse-lite": "^1.0.30001718",
     "dotenv": "^16.4.5",
     "firebase": "^10.13.2",
     "framer-motion": "^10.16.4",

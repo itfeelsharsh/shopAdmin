@@ -41,7 +41,9 @@ const generateBaseEmailTemplate = ({ title, previewText, content }) => {
       <td align="center">
         <div class="email-container">
           <div class="header">
-            <img src="${logoUrl}" alt="KamiKoto" width="160">
+            <a href="${siteUrl}" style="text-decoration: none;">
+              <img src="${logoUrl}" alt="KamiKoto" width="160">
+            </a>
           </div>
           <div class="glass-card">${content}</div>
           <div class="footer">
