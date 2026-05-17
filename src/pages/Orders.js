@@ -31,7 +31,7 @@ import AdminOrderService, {
   ORDER_PRIORITIES, 
   SHIPPING_CARRIERS 
 } from "../utils/orderService";
-import { resendOrderConfirmationEmail } from "../utils/emailService";
+import { resendOrderConfirmationEmail, sendOrderStatusEmail } from "../utils/emailService";
 import { sendUserNotification } from "../utils/notificationService";
 import { formatCurrency, formatIndianNumber } from '../utils/formatUtils';
 
@@ -531,6 +531,22 @@ function Orders() {
       }
       
       console.log(`✅ Orders: Order ${orderId} status updated to ${newStatus}`);
+
+      // Automatically dispatch order status email notification for Packed and Delivered states
+      if (['Packed', 'Delivered'].includes(newStatus)) {
+        try {
+          const fullOrderForEmail = {
+            ...orderData,
+            id: orderId,
+            status: newStatus,
+            statusHistory: [...(orderData.statusHistory || []), statusUpdate]
+          };
+          console.log(`📧 Orders: Sending automated order status email for '${newStatus}'`);
+          await sendOrderStatusEmail(fullOrderForEmail, newStatus);
+        } catch (emailErr) {
+          console.error(`❌ Orders: Automated status change email failed for '${newStatus}':`, emailErr);
+        }
+      }
       // Safely call toast only if it's available
       if (typeof toast === 'object' && toast !== null && typeof toast.success === 'function') {
         toast.success(`Order ${orderData.orderId || orderId} ${newStatus.toLowerCase()} successfully`);
@@ -653,12 +669,31 @@ function Orders() {
             : order
         )
       );
+
+      // Store a copy of the selected order before we reset state for triggering the Shipped email
+      const shippedOrderData = {
+        ...selectedOrder,
+        status: 'Shipped',
+        tracking: trackingData,
+        statusHistory: [
+          ...(selectedOrder.statusHistory || []),
+          statusUpdate
+        ]
+      };
       
       setIsModalOpen(false);
       setSelectedOrder(null);
       setShippingInfo({ trackingNumber: '', carrier: 'IndiaPost', service: 'standard', weight: '', notes: '' });
       
-      console.log(`✅ Orders: Tracking added to order ${selectedOrder.id}`);
+      console.log(`✅ Orders: Tracking added to order ${shippedOrderData.id}`);
+
+      // Automatically dispatch order status email notification for Shipped state
+      try {
+        console.log(`📧 Orders: Sending automated Shipped order status email`);
+        await sendOrderStatusEmail(shippedOrderData, 'Shipped');
+      } catch (emailErr) {
+        console.error(`❌ Orders: Automated shipped status email failed:`, emailErr);
+      }
       // Safely call toast only if it's available
       if (typeof toast === 'object' && toast !== null && typeof toast.success === 'function') {
         toast.success(`Tracking information added to order ${selectedOrder.orderId || selectedOrder.id}`);
