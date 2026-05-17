@@ -9,7 +9,7 @@ const getApiFunctionBaseUrl = () => {
   // Always use the production Cloudflare Functions domain.
   // The local React development server (npm run start) on port 3000 
   // does not execute Cloudflare functions natively without `wrangler pages dev`.
-  return 'https://kamikoto.qzz.io/api';
+  return 'https://kamikoto.click/api';
 };
 
 /**

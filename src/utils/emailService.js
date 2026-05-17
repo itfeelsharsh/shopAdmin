@@ -13,8 +13,8 @@ import featureConfig from './featureConfig';
  */
 const generateBaseEmailTemplate = ({ title, previewText, content }) => {
   const currentYear = new Date().getFullYear();
-  const logoUrl = 'https://kamikoto.qzz.io/kamikoto-logo-transparent-darkish-logo-for-better-visibility.png';
-  const siteUrl = 'https://kamikoto.qzz.io';
+  const logoUrl = 'https://kamikoto.click/kamikoto-logo-transparent-darkish-logo-for-better-visibility.png';
+  const siteUrl = 'https://kamikoto.click';
   
   return `
 <!DOCTYPE html>
@@ -49,7 +49,8 @@ const generateBaseEmailTemplate = ({ title, previewText, content }) => {
           <div class="footer">
             <p style="margin-bottom: 20px; font-weight: 600; color: #0f172a; letter-spacing: 0.5px; text-transform: uppercase;">KamiKoto Stationeries Pvt. Ltd.</p>
             <p style="margin-bottom: 8px;">North Sentinel Island, Andaman and Nicobar Islands, India</p>
-            <p style="margin-bottom: 24px;">support@kamikoto.qzz.io • +91 1800 6969 6969</p>
+            <p style="margin-bottom: 8px;">support@kamikoto.click • +91 1800 6969 6969</p>
+            <p style="margin-bottom: 24px; font-size: 11px; color: #94a3b8;">Please add hello@mailer.kamikoto.click to your address book to ensure delivery.</p>
             <p style="font-size: 12px; color: #94a3b8;">© ${currentYear} KamiKoto Stationeries Pvt. Ltd. All rights reserved.</p>
           </div>
         </div>
@@ -110,7 +111,7 @@ const generateOrderConfirmationHTML = (order, user) => {
       </div>
 
       <div style="margin-top: 40px; text-align: center;">
-        <a href="https://kamikoto.qzz.io/account/orders" class="btn">View Order Details</a>
+        <a href="https://kamikoto.click/account/orders" class="btn">View Order Details</a>
       </div>
     </div>`;
 
@@ -124,7 +125,7 @@ const generateOrderConfirmationHTML = (order, user) => {
 /**
  * Get the base URL for the API functions
  */
-const getApiFunctionBaseUrl = () => 'https://kamikoto.qzz.io/api';
+const getApiFunctionBaseUrl = () => 'https://kamikoto.click/api';
 
 /**
  * Checks if the email functionality is enabled
@@ -139,7 +140,7 @@ export const sendEmail = async (emailData) => {
 
   try {
     const fromEmail = emailData.from || featureConfig.email.fromAddress;
-    const formattedFrom = `KamiKoto Stationeries <${fromEmail}>`;
+    const formattedFrom = `Kamikoto <${fromEmail}>`;
     
     const emailPayload = {
       from: formattedFrom,

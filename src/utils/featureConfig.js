@@ -11,8 +11,8 @@ const featureConfig = {
   email: {
     enabled: getEnvVar('EMAIL_ENABLED') === 'true' || true, // Default to true for admin
     useEmailServer: false,
-    fromAddress: getEnvVar('EMAIL_FROM') || 'hello@kamikoto.qzz.io',
-    supportEmail: getEnvVar('SUPPORT_EMAIL') || 'support@kamikoto.qzz.io',
+    fromAddress: getEnvVar('EMAIL_FROM') || 'hello@mailer.kamikoto.click',
+    supportEmail: getEnvVar('SUPPORT_EMAIL') || 'support@kamikoto.click',
   },
   notifications: {
     enabled: true
