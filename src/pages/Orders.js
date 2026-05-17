@@ -544,6 +544,12 @@ function Orders() {
   };
 
   const handleResendEmail = async (order) => {
+    // Confirmation dialog to prevent accidental resends
+    const confirmed = window.confirm(
+      `Send confirmation email to ${order.userEmail}?\n\nThis will deliver a real email. Only resend if the customer did not receive the original.`
+    );
+    if (!confirmed) return;
+
     try {
       setIsResendingEmail(true);
       const user = {
@@ -552,7 +558,11 @@ function Orders() {
       };
       const result = await resendOrderConfirmationEmail(order, user);
       if (result.success) {
-        toast.success("Order confirmation email resent!");
+        if (result.data?.deduplicated) {
+          toast.info("Email was already sent recently. Please wait 60 seconds before resending.");
+        } else {
+          toast.success("Order confirmation email resent!");
+        }
       } else {
         throw new Error(result.error);
       }
