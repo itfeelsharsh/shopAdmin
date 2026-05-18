@@ -25,6 +25,8 @@ const BannerManager = () => {
   const [currentEditId, setCurrentEditId] = useState(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [slideshowEnabled, setSlideshowEnabled] = useState(true);
+  const [performingAction, setPerformingAction] = useState(false);
+  const [processingBannerId, setProcessingBannerId] = useState(null); // ID of the banner currently undergoing processing
 
   // Fetch banners on component mount
   useEffect(() => {
@@ -72,6 +74,11 @@ const BannerManager = () => {
     }
     
     try {
+      setPerformingAction(true);
+      
+      // Enforce deliberate 2-second delay for professional visual confirmation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       // Create banner with unique ID
       const bannerRef = doc(collection(db, 'banners'));
       await setDoc(bannerRef, {
@@ -96,6 +103,8 @@ const BannerManager = () => {
     } catch (error) {
       console.error('Error adding banner:', error);
       toast.error('Failed to add banner');
+    } finally {
+      setPerformingAction(false);
     }
   };
 
@@ -109,6 +118,12 @@ const BannerManager = () => {
     }
     
     try {
+      setPerformingAction(true);
+      setProcessingBannerId(currentEditId);
+      
+      // Enforce deliberate 2-second delay for professional visual confirmation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       // Update banner in Firestore
       const bannerRef = doc(db, 'banners', currentEditId);
       await setDoc(bannerRef, newBanner, { merge: true });
@@ -127,6 +142,9 @@ const BannerManager = () => {
     } catch (error) {
       console.error('Error updating banner:', error);
       toast.error('Failed to update banner');
+    } finally {
+      setPerformingAction(false);
+      setProcessingBannerId(null);
     }
   };
 
@@ -140,6 +158,12 @@ const BannerManager = () => {
     }
     
     try {
+      setPerformingAction(true);
+      setProcessingBannerId(id);
+      
+      // Enforce deliberate 2-second delay for professional visual confirmation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       // Delete banner from Firestore
       await deleteDoc(doc(db, 'banners', id));
       
@@ -162,6 +186,9 @@ const BannerManager = () => {
     } catch (error) {
       console.error('Error deleting banner:', error);
       toast.error('Failed to delete banner');
+    } finally {
+      setPerformingAction(false);
+      setProcessingBannerId(null);
     }
   };
 
@@ -194,6 +221,11 @@ const BannerManager = () => {
    */
   const updateSlideshowSetting = async () => {
     try {
+      setPerformingAction(true);
+      
+      // Enforce deliberate 2-second delay for professional visual confirmation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       const newSetting = !slideshowEnabled;
       await setDoc(doc(db, 'settings', 'bannerSettings'), {
         slideshowEnabled: newSetting
@@ -203,6 +235,8 @@ const BannerManager = () => {
     } catch (error) {
       console.error('Error updating slideshow setting:', error);
       toast.error('Failed to update slideshow setting');
+    } finally {
+      setPerformingAction(false);
     }
   };
 
@@ -217,6 +251,7 @@ const BannerManager = () => {
                 type="checkbox" 
                 checked={slideshowEnabled} 
                 onChange={updateSlideshowSetting}
+                disabled={performingAction}
                 className="sr-only peer" 
               />
               <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -315,16 +350,20 @@ const BannerManager = () => {
             <div className="flex justify-end space-x-3 mt-2">
               <button
                 onClick={cancelEdit}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                disabled={performingAction}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
               >
                 <X size={16} className="inline mr-1" /> Cancel
               </button>
               <button
                 onClick={isEditing ? handleUpdateBanner : handleAddBanner}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                disabled={performingAction}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Check size={16} className="inline mr-1" />
-                {isEditing ? 'Update Banner' : 'Add Banner'}
+                {performingAction 
+                  ? (isEditing ? 'Updating...' : 'Adding...')
+                  : (isEditing ? 'Update Banner' : 'Add Banner')}
               </button>
             </div>
           </div>
@@ -386,17 +425,21 @@ const BannerManager = () => {
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => startEdit(banner)}
-                    disabled={isEditing || isAddingNew}
-                    className="p-1 rounded-full text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={performingAction || isEditing || isAddingNew}
+                    className="p-1 rounded-full text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Edit size={18} />
                   </button>
                   <button
                     onClick={() => handleDeleteBanner(banner.id)}
-                    disabled={isEditing || isAddingNew}
-                    className="p-1 rounded-full text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    disabled={performingAction || isEditing || isAddingNew}
+                    className="p-1 rounded-full text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[24px]"
                   >
-                    <Trash2 size={18} />
+                    {processingBannerId === banner.id ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-600 border-t-transparent"></div>
+                    ) : (
+                      <Trash2 size={18} />
+                    )}
                   </button>
                 </div>
               </motion.li>

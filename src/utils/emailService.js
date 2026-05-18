@@ -257,7 +257,7 @@ const generateBaseEmailTemplate = ({ title, previewText, content }) => {
             <p style="margin: 0; font-size: 11px; color: #64748b; font-family: 'Inter', sans-serif;">
               <a href="${siteUrl}" style="color: #64748b; text-decoration: none; font-weight: 600;">Website</a>
               <span style="color: #cbd5e1; margin: 0 8px;">•</span>
-              <a href="${siteUrl}/account/orders" style="color: #64748b; text-decoration: none; font-weight: 600;">Track Order</a>
+              <a href="${siteUrl}/my-account/orders" style="color: #64748b; text-decoration: none; font-weight: 600;">Track Order</a>
               <span style="color: #cbd5e1; margin: 0 8px;">•</span>
               <a href="mailto:support@kamikoto.click" style="color: #64748b; text-decoration: none; font-weight: 600;">Support Desk</a>
             </p>
@@ -355,7 +355,7 @@ const generateOrderStatusHTML = (order, status, shipmentInfo = {}) => {
   const showTrackingSection = status === 'Shipped' && (shipmentInfo.trackingNumber || order.tracking?.code || shipmentInfo.code);
   const trackingNumber = shipmentInfo.trackingNumber || order.tracking?.code || shipmentInfo.code || '';
   const carrierName = shipmentInfo.carrier || order.tracking?.carrier || 'Standard Shipping';
-  const trackingUrl = shipmentInfo.trackingUrl || order.tracking?.url || 'https://kamikoto.click/account/orders';
+  const trackingUrl = shipmentInfo.trackingUrl || order.tracking?.url || 'https://kamikoto.click/my-account/orders';
 
   const content = `
     <div style="padding: 32px 32px;" class="mobile-padding">
@@ -513,7 +513,7 @@ const generateOrderStatusHTML = (order, status, shipmentInfo = {}) => {
 
       <!-- Action Button to View Order Status -->
       <div style="margin-top: 32px; text-align: center;">
-        <a href="https://kamikoto.click/account/orders" class="btn" style="color: #ffffff !important;">View Order Details</a>
+        <a href="https://kamikoto.click/my-account/orders" class="btn" style="color: #ffffff !important;">View Order Details</a>
       </div>
     </div>
   `;

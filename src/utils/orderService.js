@@ -198,6 +198,20 @@ class AdminOrderService {
       if (filters.userEmail) {
         ordersQuery = query(ordersQuery, where("userEmail", "==", filters.userEmail));
       }
+
+      // Server-side search optimizations for specific lookups (Email, Phone, OrderID)
+      if (filters.searchTerm) {
+        const term = filters.searchTerm.trim();
+        if (term.includes('@')) {
+          ordersQuery = query(ordersQuery, where("userEmail", "==", term));
+        } else if (/^\+?[0-9\s\-]+$/.test(term) && term.length >= 8) {
+          ordersQuery = query(ordersQuery, where("userPhone", "==", term));
+        } else if (term.toUpperCase().startsWith("KAMI-")) {
+          ordersQuery = query(ordersQuery, where("orderId", "==", term));
+        } else if (term.length === 20) {
+          ordersQuery = query(ordersQuery, where("orderId", "==", term));
+        }
+      }
       
       // Apply date range filters for time-based analysis
       if (filters.startDate) {
@@ -225,7 +239,7 @@ class AdminOrderService {
       const orderField = filters.orderBy || "createdAt";
       const orderDirection = filters.orderDirection || "desc";
       
-      // Try to apply ordering, but catch errors in case the field doesn't exist
+      // Try to apply ordering, but catch errors in case the field doesn't exist or compound index is missing
       try {
         ordersQuery = query(ordersQuery, orderBy(orderField, orderDirection));
         console.log(`🔍 AdminOrderService: Applied ordering by ${orderField} ${orderDirection}`);
@@ -234,12 +248,14 @@ class AdminOrderService {
         // Continue with query without ordering
       }
       
-      // Apply pagination for performance optimization
+      // Apply pagination/bounds for performance optimization
+      // Bounding queries prevents Firebase API quota exhaustion
       if (pagination.limit) {
-        ordersQuery = query(ordersQuery, limit(pagination.limit));
+        const maxLimit = filters.searchTerm ? 80 : pagination.limit;
+        ordersQuery = query(ordersQuery, limit(maxLimit));
         
         // Handle pagination cursor for large datasets
-        if (pagination.lastDoc) {
+        if (pagination.lastDoc && !filters.searchTerm) {
           ordersQuery = query(ordersQuery, startAfter(pagination.lastDoc));
         }
       }
@@ -302,12 +318,13 @@ class AdminOrderService {
       
       console.log(`✅ AdminOrderService: Retrieved ${filteredOrders.length} orders`);
       
+      const finalLimit = filters.searchTerm ? 80 : (pagination.limit || 0);
       return {
         success: true,
         orders: filteredOrders,
         totalCount: filteredOrders.length,
         lastDoc: ordersSnapshot.docs[ordersSnapshot.docs.length - 1] || null,
-        hasMore: ordersSnapshot.docs.length === (pagination.limit || 0)
+        hasMore: ordersSnapshot.docs.length === finalLimit
       };
     } catch (error) {
       console.error('❌ AdminOrderService: Error fetching orders:', error);
@@ -315,7 +332,9 @@ class AdminOrderService {
         success: false,
         error: error.message || 'Failed to fetch orders',
         orders: [],
-        totalCount: 0
+        totalCount: 0,
+        lastDoc: null,
+        hasMore: false
       };
     }
   }

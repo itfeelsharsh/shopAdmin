@@ -31,6 +31,10 @@ const Notifications = () => {
 
     try {
       setIsSending(true);
+      
+      // Enforce deliberate 2-second delay for professional visual confirmation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       const result = await sendBroadcastNotification(notification);
       
       if (result.success) {

@@ -20,6 +20,7 @@ const CouponManager = () => {
   const [isProductsDropdownOpen, setIsProductsDropdownOpen] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState("");
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [deletingCouponId, setDeletingCouponId] = useState(null);
   
   // New coupon state with default values
   const [newCoupon, setNewCoupon] = useState({
@@ -121,6 +122,9 @@ const CouponManager = () => {
     setSubmissionStatus("submitting");
     
     try {
+      // Enforce deliberate 2-second delay for professional visual confirmation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       // Format dates to timestamps
       const couponToSave = {
         ...newCoupon,
@@ -166,7 +170,7 @@ const CouponManager = () => {
       setTimeout(() => {
         setIsSubmitting(false);
         setSubmissionStatus(null);
-      }, 2000);
+      }, 1000);
     }
   };
 
@@ -200,6 +204,9 @@ const CouponManager = () => {
     setSubmissionStatus("submitting");
     
     try {
+      // Enforce deliberate 2-second delay for professional visual confirmation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       const couponRef = doc(db, "coupons", editingCoupon.id);
       
       // Format dates and values properly
@@ -233,7 +240,7 @@ const CouponManager = () => {
       setTimeout(() => {
         setIsSubmitting(false);
         setSubmissionStatus(null);
-      }, 2000);
+      }, 1000);
     }
   };
 
@@ -247,11 +254,18 @@ const CouponManager = () => {
     }
 
     try {
+      setDeletingCouponId(id);
+      
+      // Enforce deliberate 2-second delay for professional visual confirmation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       await deleteDoc(doc(db, "coupons", id));
       setCoupons(coupons.filter(coupon => coupon.id !== id));
     } catch (error) {
       console.error("Error deleting coupon:", error);
       alert("Failed to delete the coupon. Please try again.");
+    } finally {
+      setDeletingCouponId(null);
     }
   };
 
@@ -779,15 +793,21 @@ const CouponManager = () => {
                     <div className="flex gap-1">
                       <button
                         onClick={() => startEditCoupon(coupon)}
-                        className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600 transition duration-200 text-sm"
+                        disabled={isSubmitting || deletingCouponId !== null}
+                        className="bg-blue-500 text-white p-1 px-2 rounded hover:bg-blue-600 transition duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDeleteCoupon(coupon.id)}
-                        className="bg-red-500 text-white p-1 rounded hover:bg-red-600 transition duration-200 text-sm"
+                        disabled={isSubmitting || deletingCouponId !== null}
+                        className="bg-red-500 text-white p-1 px-2 rounded hover:bg-red-600 transition duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[54px]"
                       >
-                        Delete
+                        {deletingCouponId === coupon.id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        ) : (
+                          "Delete"
+                        )}
                       </button>
                     </div>
                   </td>

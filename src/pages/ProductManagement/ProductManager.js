@@ -43,6 +43,8 @@ const ProductManager = () => {
   const [bulkQuantity, setBulkQuantity] = useState("");
   const [viewProductModal, setViewProductModal] = useState({ open: false, product: null });
   const [performingBulkOperation, setPerformingBulkOperation] = useState(false);
+  const [processingAction, setProcessingAction] = useState(false);
+  const [processingProduct, setProcessingProduct] = useState({ id: null, type: null }); // type: 'delete' or 'visibility'
 
   // Stats
   const [stats, setStats] = useState({
@@ -78,30 +80,49 @@ const ProductManager = () => {
         ...doc.data()
       }));
 
-      // Fetch orders to calculate performance
-      const ordersCol = collection(db, "orders");
-      const ordersSnapshot = await getDocs(ordersCol);
+      // Check if we have cached salesData in sessionStorage with a 5-minute TTL
+      let salesData = {};
+      const CACHE_KEY = "shopAdmin_productSalesData_cache";
+      const CACHE_TIME_KEY = "shopAdmin_productSalesData_cache_timestamp";
+      const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+      
+      const cachedData = sessionStorage.getItem(CACHE_KEY);
+      const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
+      const now = Date.now();
+      
+      if (cachedData && cachedTime && (now - Number(cachedTime) < CACHE_TTL_MS)) {
+        console.log("⚡ ProductManager: Using cached product sales data from sessionStorage");
+        salesData = JSON.parse(cachedData);
+      } else {
+        console.log("🔍 ProductManager: Cache expired or missing, fetching orders from Firestore...");
+        // Fetch orders to calculate performance
+        const ordersCol = collection(db, "orders");
+        const ordersSnapshot = await getDocs(ordersCol);
 
-      // Calculate sales per product
-      const salesData = {};
-      ordersSnapshot.docs.forEach(orderDoc => {
-        const order = orderDoc.data();
-        if (order.items && Array.isArray(order.items)) {
-          order.items.forEach(item => {
-            const productId = item.productId || item.id;
-            if (!salesData[productId]) {
-              salesData[productId] = {
-                totalSales: 0,
-                totalRevenue: 0,
-                orderCount: 0
-              };
-            }
-            salesData[productId].totalSales += item.quantity || 0;
-            salesData[productId].totalRevenue += (item.price * item.quantity) || 0;
-            salesData[productId].orderCount += 1;
-          });
-        }
-      });
+        // Calculate sales per product
+        ordersSnapshot.docs.forEach(orderDoc => {
+          const order = orderDoc.data();
+          if (order.items && Array.isArray(order.items)) {
+            order.items.forEach(item => {
+              const productId = item.productId || item.id;
+              if (!salesData[productId]) {
+                salesData[productId] = {
+                  totalSales: 0,
+                  totalRevenue: 0,
+                  orderCount: 0
+                };
+              }
+              salesData[productId].totalSales += item.quantity || 0;
+              salesData[productId].totalRevenue += (item.price * item.quantity) || 0;
+              salesData[productId].orderCount += 1;
+            });
+          }
+        });
+        
+        // Cache the calculated salesData
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify(salesData));
+        sessionStorage.setItem(CACHE_TIME_KEY, now.toString());
+      }
 
       setOrderData(salesData);
 
@@ -237,6 +258,10 @@ const ProductManager = () => {
 
     try {
       setPerformingBulkOperation(true);
+      
+      // Enforce deliberate 2-second delay for professional visual transitions
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       const batch = writeBatch(db);
 
       selectedProducts.forEach(productId => {
@@ -273,6 +298,9 @@ const ProductManager = () => {
 
     try {
       setPerformingBulkOperation(true);
+      
+      // Enforce deliberate 2-second delay for professional visual transitions
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       for (const productId of selectedProducts) {
         const product = products.find(p => p.id === productId);
@@ -307,6 +335,9 @@ const ProductManager = () => {
 
     try {
       setPerformingBulkOperation(true);
+      
+      // Enforce deliberate 2-second delay for professional visual transitions
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       for (const productId of selectedProducts) {
         await deleteDoc(doc(db, "products", productId));
@@ -329,6 +360,12 @@ const ProductManager = () => {
    */
   const toggleProductVisibility = async (productId, currentVisibility) => {
     try {
+      setProcessingAction(true);
+      setProcessingProduct({ id: productId, type: 'visibility' });
+      
+      // Enforce deliberate 2-second delay for professional visual transitions
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       const productRef = doc(db, "products", productId);
       await updateDoc(productRef, {
         showOnHome: !currentVisibility,
@@ -340,6 +377,9 @@ const ProductManager = () => {
     } catch (error) {
       console.error("Error updating visibility:", error);
       toast.error("Failed to update visibility");
+    } finally {
+      setProcessingAction(false);
+      setProcessingProduct({ id: null, type: null });
     }
   };
 
@@ -352,12 +392,21 @@ const ProductManager = () => {
     }
 
     try {
+      setProcessingAction(true);
+      setProcessingProduct({ id: productId, type: 'delete' });
+      
+      // Enforce deliberate 2-second delay for professional visual transitions
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       await deleteDoc(doc(db, "products", productId));
       toast.success("Product deleted successfully!");
       fetchProducts();
     } catch (error) {
       console.error("Error deleting product:", error);
       toast.error("Failed to delete product");
+    } finally {
+      setProcessingAction(false);
+      setProcessingProduct({ id: null, type: null });
     }
   };
 
@@ -757,13 +806,16 @@ const ProductManager = () => {
                   <div className="absolute bottom-2 right-2">
                     <button
                       onClick={() => toggleProductVisibility(product.id, product.isVisible)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      disabled={processingAction}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${
                         product.isVisible
                           ? 'bg-green-500 text-white'
                           : 'bg-gray-500 text-white'
                       }`}
                     >
-                      {product.isVisible ? 'Visible' : 'Hidden'}
+                      {processingProduct.id === product.id && processingProduct.type === 'visibility'
+                        ? (product.isVisible ? 'Hiding...' : 'Showing...')
+                        : (product.isVisible ? 'Visible' : 'Hidden')}
                     </button>
                   </div>
                 </div>
@@ -822,8 +874,11 @@ const ProductManager = () => {
                       size="sm"
                       variant="danger"
                       onClick={() => handleDeleteProduct(product.id)}
+                      disabled={processingAction}
                       icon={<Trash2 className="w-4 h-4" />}
-                    />
+                    >
+                      {processingProduct.id === product.id && processingProduct.type === 'delete' ? 'Deleting...' : ''}
+                    </Button>
                   </div>
                 </div>
               </Card>
@@ -898,33 +953,45 @@ const ProductManager = () => {
                     <td className="px-6 py-4">
                       <button
                         onClick={() => toggleProductVisibility(product.id, product.isVisible)}
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        disabled={processingAction}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${
                           product.isVisible
                             ? 'bg-green-100 text-green-700'
                             : 'bg-gray-100 text-gray-700'
                         }`}
                       >
-                        {product.isVisible ? 'Visible' : 'Hidden'}
+                        {processingProduct.id === product.id && processingProduct.type === 'visibility'
+                          ? (product.isVisible ? 'Hiding...' : 'Showing...')
+                          : (product.isVisible ? 'Visible' : 'Hidden')}
                       </button>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
                         <button
                           onClick={() => setViewProductModal({ open: true, product })}
-                          className="text-blue-600 hover:text-blue-800"
+                          disabled={processingAction}
+                          className="text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Eye className="w-5 h-5" />
                         </button>
                         <Link to={`/products/edit/${product.id}`}>
-                          <button className="text-green-600 hover:text-green-800">
+                          <button 
+                            disabled={processingAction}
+                            className="text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
                             <Edit className="w-5 h-5" />
                           </button>
                         </Link>
                         <button
                           onClick={() => handleDeleteProduct(product.id)}
-                          className="text-red-600 hover:text-red-800"
+                          disabled={processingAction}
+                          className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[20px]"
                         >
-                          <Trash2 className="w-5 h-5" />
+                          {processingProduct.id === product.id && processingProduct.type === 'delete' ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-600 border-t-transparent"></div>
+                          ) : (
+                            <Trash2 className="w-5 h-5" />
+                          )}
                         </button>
                       </div>
                     </td>

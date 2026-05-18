@@ -2,7 +2,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, getCountFromServer, where } from 'firebase/firestore';
 import { db } from "../firebase";
 import { formatCurrency, formatLakhs } from "../utils/formatUtils";
 import {
@@ -12,7 +12,7 @@ import {
 } from "react-feather";
 import { Card, LoadingSpinner, Badge } from "../components/ui";
 
-// Import recharts components
+// Import Recharts components dynamically or handle require safely
 const ChartComponents = () => {
   const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, Area, AreaChart } = require('recharts');
   return {
@@ -21,64 +21,47 @@ const ChartComponents = () => {
 };
 
 /**
- * Animated Stat Card Component
+ * Enhanced Shopify Stat Card
  */
 const StatCard = ({ title, value, icon: Icon, color, trend, loading }) => {
   const colorClasses = {
-    blue: { bg: 'bg-blue-100', icon: 'text-blue-600', gradient: 'from-blue-500 to-blue-600' },
-    green: { bg: 'bg-green-100', icon: 'text-green-600', gradient: 'from-green-500 to-green-600' },
-    purple: { bg: 'bg-purple-100', icon: 'text-purple-600', gradient: 'from-purple-500 to-purple-600' },
-    orange: { bg: 'bg-orange-100', icon: 'text-orange-600', gradient: 'from-orange-500 to-orange-600' },
-    red: { bg: 'bg-red-100', icon: 'text-red-600', gradient: 'from-red-500 to-red-600' }
+    green: { border: 'border-l-[#008060]', text: 'text-[#008060]', bg: 'bg-[#e6f4ea]' },
+    blue: { border: 'border-l-blue-600', text: 'text-blue-600', bg: 'bg-blue-50' },
+    purple: { border: 'border-l-indigo-600', text: 'text-indigo-600', bg: 'bg-indigo-50' },
+    orange: { border: 'border-l-amber-600', text: 'text-amber-600', bg: 'bg-amber-50' }
   };
 
-  const colors = colorClasses[color] || colorClasses.blue;
+  const currentColors = colorClasses[color] || colorClasses.blue;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      whileHover={{ y: -4 }}
-      className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:border-blue-100 hover:shadow-md transition-all duration-300 overflow-hidden relative"
+      className={`bg-white rounded-xl border border-gray-200 border-l-4 ${currentColors.border} p-5 shadow-sm hover:shadow transition-all flex items-center justify-between`}
     >
-      {/* Background gradient decoration */}
-      <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors.gradient} opacity-5 rounded-full -mr-16 -mt-16`} />
-
-      <div className="flex items-start justify-between relative z-10">
-        <div className="flex-1">
-          <p className="text-gray-600 text-sm font-medium mb-2">{title}</p>
-          {loading ? (
-            <div className="h-8 w-24 bg-gray-200 animate-pulse rounded" />
-          ) : (
-            <h3 className="text-3xl font-bold text-gray-900">
-              {value}
-            </h3>
-          )}
-          {trend && (
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="flex items-center mt-2"
-            >
-              <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-              <span className="text-sm text-green-600 font-medium">{trend}</span>
-            </motion.div>
-          )}
-        </div>
-        <div
-          className={`${colors.bg} p-4 rounded-xl transition-transform duration-300`}
-        >
-          <Icon className={`w-6 h-6 ${colors.icon}`} />
-        </div>
+      <div className="flex-1">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
+        {loading ? (
+          <div className="h-7 w-20 bg-slate-100 animate-pulse rounded mt-2" />
+        ) : (
+          <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">{value}</h3>
+        )}
+        {!loading && trend && (
+          <div className="flex items-center mt-2 text-xs font-semibold text-[#008060]">
+            <TrendingUp className="w-3.5 h-3.5 mr-1" />
+            <span>{trend}</span>
+          </div>
+        )}
+      </div>
+      <div className={`p-3 rounded-xl ${currentColors.bg}`}>
+        <Icon className={`w-5 h-5 ${currentColors.text}`} />
       </div>
     </motion.div>
   );
 };
 
 /**
- * Admin Dashboard Component
+ * Shopify Polaris Style Admin Dashboard Page
  */
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -101,35 +84,52 @@ const AdminDashboard = () => {
   const [Charts, setCharts] = useState(null);
 
   useEffect(() => {
-    const charts = ChartComponents();
-    setCharts(charts);
-    setChartsReady(true);
+    try {
+      const charts = ChartComponents();
+      setCharts(charts);
+      setChartsReady(true);
+    } catch (e) {
+      console.error("Failed to load charting library:", e);
+    }
   }, []);
 
-  const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+  const COLORS = ['#008060', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#6B7280'];
   const STATUS_COLORS = {
     "Placed": "#F59E0B",
-    "Approved": "#3B82F6",
     "Shipped": "#8B5CF6",
-    "Delivered": "#10B981",
-    "Declined": "#EF4444",
-    "Cancelled": "#6B7280"
+    "Delivered": "#008060",
+    "Cancelled": "#EF4444"
   };
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        // Fetch all necessary data in parallel
-        const [ordersSnapshot, usersSnapshot] = await Promise.all([
-          getDocs(collection(db, "orders")),
-          getDocs(collection(db, "users"))
-        ]);
-
         const now = new Date();
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+        // Fetch recent 150 orders (for deep trend analytics) and total user counts in parallel
+        // Conserves Firestore daily credits beautifully
+        const ordersCol = collection(db, "orders");
+        const usersCol = collection(db, "users");
+        
+        const [ordersSnapshot, totalUsersSnap] = await Promise.all([
+          getDocs(query(ordersCol, orderBy("createdAt", "desc"), limit(150))),
+          getCountFromServer(usersCol)
+        ]);
+
+        const totalUsers = totalUsersSnap.data().count;
+
+        // Try server count for new users this month to be ultra-efficient
+        let newUsersThisMonth = 0;
+        try {
+          const newUsersSnap = await getCountFromServer(query(usersCol, where("createdAt", ">=", firstDayOfMonth.toISOString())));
+          newUsersThisMonth = newUsersSnap.data().count;
+        } catch (e) {
+          console.warn("Falling back to client-side or zero for new users month count", e);
+        }
 
         // Process Orders Data
         let totalRevenue = 0;
@@ -138,7 +138,7 @@ const AdminDashboard = () => {
         const productSales = {};
         const monthlyData = {};
 
-        // Initialize last 6 months for revenue chart
+        // Prepopulate last 6 months for chart trends
         for (let i = 0; i < 6; i++) {
           const month = new Date();
           month.setMonth(now.getMonth() - i);
@@ -149,11 +149,20 @@ const AdminDashboard = () => {
 
         const orders = ordersSnapshot.docs.map(doc => {
           const data = doc.data();
-          const orderTotal = data.total || data.totalAmount || data.amount || 0;
-          const orderDate = data.orderDate ? new Date(data.orderDate) : (data.createdAt ? new Date(data.createdAt.seconds * 1000) : null);
-          const status = data.status || "Unknown";
+          const orderTotal = data.total || data.amount || 0;
+          
+          let orderDate = null;
+          if (data.createdAt && typeof data.createdAt.toDate === 'function') {
+            orderDate = data.createdAt.toDate();
+          } else if (data.createdAt) {
+            orderDate = new Date(data.createdAt);
+          } else if (data.orderDate) {
+            orderDate = new Date(data.orderDate);
+          }
+          
+          const status = data.status || "Placed";
 
-          // Overall Stats
+          // Accumulate Stats
           totalRevenue += orderTotal;
           if (orderDate && orderDate >= firstDayOfMonth) {
             monthlyRevenueTotal += orderTotal;
@@ -165,18 +174,18 @@ const AdminDashboard = () => {
           }
           statusCounts[status].count += 1;
 
-          // Product Performance
+          // Product sales volume
           if (data.items && Array.isArray(data.items)) {
             data.items.forEach(item => {
               if (!productSales[item.name]) {
                 productSales[item.name] = { name: item.name, quantity: 0, revenue: 0 };
               }
               productSales[item.name].quantity += item.quantity || 0;
-              productSales[item.name].revenue += (item.price * item.quantity) || 0;
+              productSales[item.name].revenue += ((item.price || 0) * (item.quantity || 0)) || 0;
             });
           }
 
-          // Monthly Revenue Chart Data
+          // Group by Month
           if (orderDate && orderDate >= sixMonthsAgo) {
             const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`;
             if (monthlyData[monthKey]) {
@@ -185,35 +194,26 @@ const AdminDashboard = () => {
             }
           }
 
-          return { id: doc.id, ...data, orderDate };
+          return { id: doc.id, ...data, orderDate, total: orderTotal };
         });
 
-        // Finalize Stat Arrays
+        // Format Monthly Array
         const monthlyArray = Object.values(monthlyData).sort((a, b) => {
           return a.year === b.year
             ? new Date(0, a.month, 0) - new Date(0, b.month, 0)
             : a.year - b.year;
         });
 
+        // Top 5 Products
         const productArray = Object.values(productSales)
           .sort((a, b) => b.quantity - a.quantity)
           .slice(0, 5);
 
-        // Process User Data
-        let newUsersCount = 0;
-        usersSnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          if (data.createdAt && new Date(data.createdAt.seconds * 1000) >= firstDayOfMonth) {
-            newUsersCount++;
-          }
-        });
-
-        // Get Recent Orders (Sort by date)
+        // Recent Orders
         const recentOrders = [...orders]
           .sort((a, b) => (b.orderDate || 0) - (a.orderDate || 0))
           .slice(0, 5);
 
-        // Update All States
         setOrderStats({
           totalOrders: orders.length,
           totalRevenue: totalRevenue,
@@ -225,13 +225,13 @@ const AdminDashboard = () => {
         setProductPerformance(productArray);
         setStatusDistribution(Object.values(statusCounts));
         setUserStats({
-          totalUsers: usersSnapshot.docs.length,
-          newUsersThisMonth: newUsersCount
+          totalUsers,
+          newUsersThisMonth
         });
 
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-        toast.error("Failed to load dashboard data");
+        console.error("Error fetching dashboard statistics:", error);
+        toast.error("Failed to load dashboard metrics");
       } finally {
         setLoading(false);
       }
@@ -243,11 +243,11 @@ const AdminDashboard = () => {
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-4 shadow-xl rounded-xl border border-gray-200">
-          <p className="font-semibold text-gray-800 mb-2">{label}</p>
+        <div className="bg-white p-3.5 shadow-md rounded-xl border border-gray-200 text-xs">
+          <p className="font-bold text-slate-800 mb-1.5">{label}</p>
           {payload.map((entry, index) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {entry.name === "Revenue" || entry.name === "revenue" ? formatCurrency(entry.value) : entry.value}
+            <p key={index} className="font-semibold" style={{ color: entry.color }}>
+              {entry.name === "Revenue" ? "Revenue: " + formatCurrency(entry.value) : `Orders: ${entry.value}`}
             </p>
           ))}
         </div>
@@ -258,8 +258,8 @@ const AdminDashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-full">
-        <LoadingSpinner size="xl" text="Loading dashboard..." />
+      <div className="flex justify-center items-center h-96 bg-[#f6f6f7]">
+        <LoadingSpinner size="xl" text="Analyzing shop aggregates..." />
       </div>
     );
   }
@@ -268,30 +268,33 @@ const AdminDashboard = () => {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
       className="space-y-6"
     >
-      {/* Welcome Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-xl border border-slate-700"
-      >
-        <h1 className="text-3xl font-bold mb-2">Dashboard Overview</h1>
-        <p className="text-slate-400">Manage your store operations and monitor performance metrics.</p>
-      </motion.div>
+      {/* Welcome Bar */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Overview</h2>
+          <p className="text-sm text-slate-500 mt-0.5">Real-time indicators and operational summary of KamiKoto store.</p>
+        </div>
+        <div className="flex gap-2">
+          <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-[#008060] bg-[#e6f4ea] rounded-full border border-emerald-200">
+            <span className="w-1.5 h-1.5 bg-[#008060] rounded-full animate-ping" />
+            <span>Live Analytics</span>
+          </span>
+        </div>
+      </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Grid Indicators */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Total Orders"
+          title="Total Transactions"
           value={orderStats.totalOrders}
           icon={ShoppingCart}
           color="blue"
           loading={loading}
         />
         <StatCard
-          title="Total Revenue"
+          title="Gross Sales"
           value={formatCurrency(orderStats.totalRevenue)}
           icon={DollarSign}
           color="green"
@@ -299,62 +302,58 @@ const AdminDashboard = () => {
           loading={loading}
         />
         <StatCard
-          title="Avg. Order Value"
+          title="AOV (Avg Order)"
           value={formatCurrency(orderStats.averageOrderValue)}
           icon={TrendingUp}
           color="purple"
           loading={loading}
         />
         <StatCard
-          title="Total Users"
+          title="Customers Count"
           value={userStats.totalUsers}
           icon={Users}
           color="orange"
-          trend={`+${userStats.newUsersThisMonth} new`}
+          trend={userStats.newUsersThisMonth > 0 ? `+${userStats.newUsersThisMonth} new registered` : undefined}
           loading={loading}
         />
       </div>
 
-      {/* Charts Section */}
+      {/* Polaris Charting Layout */}
       {chartsReady && Charts && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Monthly Revenue Chart */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card
-              title="Monthly Revenue"
-              subtitle="Last 6 months performance"
-              icon={<Activity className="w-5 h-5 text-blue-600" />}
-              gradient
-            >
+          <div className="lg:col-span-2">
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <Activity className="w-4 h-4 text-slate-500" />
+                <h4 className="font-bold text-slate-900 text-sm">Monthly Revenue Trend</h4>
+              </div>
               {monthlyRevenue.length > 0 ? (
-                <div className="h-80 w-full">
+                <div className="h-72 w-full text-xs">
                   <Charts.ResponsiveContainer width="100%" height="100%">
                     <Charts.AreaChart
                       data={monthlyRevenue}
-                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                     >
                       <defs>
                         <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#008060" stopOpacity={0.15}/>
+                          <stop offset="95%" stopColor="#008060" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <Charts.CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <Charts.XAxis dataKey="month" stroke="#6B7280" />
+                      <Charts.CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <Charts.XAxis dataKey="month" stroke="#94a3b8" />
                       <Charts.YAxis
                         tickFormatter={(value) => formatLakhs(value)}
-                        stroke="#6B7280"
+                        stroke="#94a3b8"
                       />
                       <Charts.Tooltip content={<CustomTooltip />} />
                       <Charts.Area
                         type="monotone"
                         dataKey="revenue"
                         name="Revenue"
-                        stroke="#3B82F6"
+                        stroke="#008060"
+                        strokeWidth={2.5}
                         fillOpacity={1}
                         fill="url(#colorRevenue)"
                       />
@@ -362,167 +361,152 @@ const AdminDashboard = () => {
                   </Charts.ResponsiveContainer>
                 </div>
               ) : (
-                <p className="text-center py-10 text-gray-500">No revenue data available</p>
+                <div className="text-center py-12 text-slate-400 text-sm">No recent transactions to aggregate.</div>
               )}
-            </Card>
-          </motion.div>
+            </div>
+          </div>
 
-          {/* Order Status Distribution */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card
-              title="Order Status"
-              subtitle="Current distribution"
-              icon={<Package className="w-5 h-5 text-purple-600" />}
-              gradient
-            >
+          {/* Status Breakdown */}
+          <div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm h-full flex flex-col">
+              <div className="flex items-center gap-2 mb-4">
+                <Package className="w-4 h-4 text-slate-500" />
+                <h4 className="font-bold text-slate-900 text-sm">Fulfilment Distribution</h4>
+              </div>
               {statusDistribution.length > 0 ? (
-                <div className="h-80 w-full">
-                  <Charts.ResponsiveContainer width="100%" height="100%">
-                    <Charts.PieChart>
-                      <Charts.Pie
-                        data={statusDistribution}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="count"
-                        nameKey="status"
-                        label={({ status, count, percent }) =>
-                          `${status}: ${count}`
-                        }
-                      >
-                        {statusDistribution.map((entry, index) => (
-                          <Charts.Cell
-                            key={`cell-${index}`}
-                            fill={STATUS_COLORS[entry.status] || COLORS[index % COLORS.length]}
-                          />
-                        ))}
-                      </Charts.Pie>
-                      <Charts.Tooltip />
-                    </Charts.PieChart>
-                  </Charts.ResponsiveContainer>
+                <div className="flex-1 flex flex-col justify-center items-center">
+                  <div className="h-44 w-full">
+                    <Charts.ResponsiveContainer width="100%" height="100%">
+                      <Charts.PieChart>
+                        <Charts.Pie
+                          data={statusDistribution}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={75}
+                          paddingAngle={3}
+                          dataKey="count"
+                          nameKey="status"
+                        >
+                          {statusDistribution.map((entry, index) => (
+                            <Charts.Cell
+                              key={`cell-${index}`}
+                              fill={STATUS_COLORS[entry.status] || COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Charts.Pie>
+                        <Charts.Tooltip />
+                      </Charts.PieChart>
+                    </Charts.ResponsiveContainer>
+                  </div>
+                  {/* Legend list */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 w-full mt-4 text-xs font-semibold text-slate-600">
+                    {statusDistribution.map((entry, index) => (
+                      <div key={index} className="flex items-center gap-1.5">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: STATUS_COLORS[entry.status] || COLORS[index % COLORS.length] }}
+                        />
+                        <span>{entry.status}: {entry.count}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
-                <p className="text-center py-10 text-gray-500">No order data available</p>
+                <div className="text-center py-12 text-slate-400 text-sm my-auto">No orders status records found.</div>
               )}
-            </Card>
-          </motion.div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Top Products and Recent Orders */}
+      {/* Bottom Lists split */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Products */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card
-            title="Top Selling Products"
-            subtitle="Best performers"
-            icon={<TrendingUp className="w-5 h-5 text-green-600" />}
-            gradient
-          >
-            {productPerformance.length > 0 ? (
-              <div className="space-y-3">
-                {productPerformance.map((product, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 * index }}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-blue-600 font-bold text-sm">{index + 1}</span>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">{product.name}</p>
-                        <p className="text-sm text-gray-500">{product.quantity} units sold</p>
-                      </div>
+        {/* Best Sellers */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="w-4 h-4 text-slate-500" />
+            <h4 className="font-bold text-slate-900 text-sm">Best Sellers</h4>
+          </div>
+          {productPerformance.length > 0 ? (
+            <div className="space-y-2.5">
+              {productPerformance.map((product, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 border border-slate-100 bg-slate-50/50 rounded-xl hover:border-slate-200 hover:bg-slate-50 transition-all duration-150"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#008060] font-bold text-sm flex items-center justify-center border border-emerald-100">
+                      <span>{index + 1}</span>
                     </div>
-                    <Badge variant="success">
-                      {formatCurrency(product.revenue)}
-                    </Badge>
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center py-10 text-gray-500">No product data available</p>
-            )}
-          </Card>
-        </motion.div>
-
-        {/* Recent Orders */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <Card
-            title="Recent Orders"
-            subtitle="Latest transactions"
-            icon={<ShoppingBag className="w-5 h-5 text-orange-600" />}
-            actions={
-              <Link to="/orders" className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1">
-                View All <ChevronRight className="w-4 h-4" />
-              </Link>
-            }
-            gradient
-          >
-            {orderStats.recentOrders.length > 0 ? (
-              <div className="space-y-3">
-                {orderStats.recentOrders.map((order, index) => (
-                  <motion.div
-                    key={order.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 * index }}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                  >
                     <div>
-                      <p className="font-semibold text-gray-800">
-                        {order.orderId || order.id.substring(0, 8)}
-                      </p>
-                      <p className="text-sm text-gray-500">{order.userName || order.userEmail}</p>
+                      <p className="font-bold text-slate-900 text-sm leading-snug">{product.name}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{product.quantity} items purchased</p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-800">{formatCurrency(order.total)}</p>
-                      <Badge
-                        variant={
-                          order.status === 'Delivered' ? 'success' :
-                          order.status === 'Shipped' ? 'purple' :
-                          order.status === 'Placed' ? 'warning' :
-                          order.status === 'Cancelled' ? 'danger' :
-                          'default'
-                        }
-                        size="sm"
-                      >
-                        {order.status}
-                      </Badge>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center py-10 text-gray-500">No recent orders</p>
-            )}
-          </Card>
-        </motion.div>
+                  </div>
+                  <span className="text-sm font-extrabold text-slate-900">
+                    {formatCurrency(product.revenue)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-slate-400 text-sm">No items sales data generated yet.</div>
+          )}
+        </div>
+
+        {/* Latest Activity orders */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-slate-500" />
+              <h4 className="font-bold text-slate-900 text-sm">Recent Orders</h4>
+            </div>
+            <Link to="/orders" className="text-xs font-bold text-[#008060] hover:text-[#004b35] flex items-center gap-0.5 uppercase tracking-wider">
+              <span>View All</span>
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+          {orderStats.recentOrders.length > 0 ? (
+            <div className="space-y-2.5">
+              {orderStats.recentOrders.map((order) => (
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between p-3 border border-slate-100 bg-slate-50/50 rounded-xl hover:border-slate-200 hover:bg-slate-50 transition-all duration-150"
+                >
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm leading-snug">
+                      Order #{order.orderId || order.id.substring(0, 8)}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">{order.userName || order.userEmail || "Anonymous"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-extrabold text-slate-900 text-sm">{formatCurrency(order.total)}</p>
+                    <span
+                      className={`inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase border mt-0.5 ${
+                        order.status === 'Delivered' ? 'bg-green-50 text-green-700 border-green-200' :
+                        order.status === 'Shipped' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                        order.status === 'Placed' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                        'bg-red-50 text-red-700 border-red-200'
+                      }`}
+                    >
+                      {order.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-slate-400 text-sm">No transaction activity logged yet.</div>
+          )}
+        </div>
       </div>
     </motion.div>
   );
 };
 
 /**
- * Admin Home Layout Component with Sidebar
+ * Shopify Polaris Style Admin Home Layout Shell with Sidebar navigation
  */
 const AdminHome = () => {
   const location = useLocation();
@@ -535,103 +519,84 @@ const AdminHome = () => {
   };
 
   const menuItems = [
-    { path: "/", icon: Home, label: "Dashboard" },
+    { path: "/", icon: Home, label: "Overview" },
     { path: "/orders", icon: ShoppingBag, label: "Orders" },
     { path: "/products", icon: Package, label: "Products" },
-    { path: "/users", icon: Users, label: "Users" },
-    { path: "/coupons", icon: Tag, label: "Coupons" },
-    { path: "/banners", icon: ImageIcon, label: "Banners" },
+    { path: "/users", icon: Users, label: "Customers" },
+    { path: "/coupons", icon: Tag, label: "Discount Codes" },
+    { path: "/banners", icon: ImageIcon, label: "Store Banners" },
     { path: "/announcements", icon: Bell, label: "Announcements" },
-    { path: "/notifications", icon: Smartphone, label: "Push Notifications" }
+    { path: "/notifications", icon: Smartphone, label: "Push Campaigns" }
   ];
 
   const isManageRoute = location.pathname !== '/';
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar - Desktop */}
+    <div className="flex h-screen bg-[#f6f6f7] font-sans antialiased text-slate-900 select-none">
+      {/* Desktop side navigation */}
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
-            initial={{ x: -300 }}
-            animate={{ x: 0 }}
-            exit={{ x: -300 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="hidden lg:flex w-72 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex-col shadow-2xl"
+            initial={{ x: -280, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -280, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 28 }}
+            className="hidden lg:flex w-64 bg-[#1a1a1a] text-slate-300 flex-col border-r border-[#262626] relative z-25"
           >
-            {/* Logo */}
-            <div className="p-6 border-b border-gray-700">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2 }}
-                className="flex items-center gap-3"
-              >
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <Package className="w-6 h-6" />
+            {/* Header logo */}
+            <div className="p-5 border-b border-[#262626] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-[#008060] rounded-lg flex items-center justify-center border border-emerald-600 shadow-inner">
+                  <Package className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">Shop Admin</h2>
-                  <p className="text-xs text-gray-400">Management Panel</p>
+                  <h2 className="text-sm font-extrabold text-white leading-tight uppercase tracking-wider">KamiKoto</h2>
+                  <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase">Admin Portal</p>
                 </div>
-              </motion.div>
+              </div>
             </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+            {/* Sidebar menu routes */}
+            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
               {menuItems.map((item, index) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path ||
                   (item.path !== '/' && location.pathname.startsWith(item.path));
 
                 return (
-                  <motion.div
+                  <Link
                     key={item.path}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 * index }}
+                    to={item.path}
+                    className={`
+                      flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all duration-150 border-l-4
+                      ${isActive
+                        ? 'bg-[#262626] text-white border-l-[#008060] shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-[#262626]/40 border-l-transparent'
+                      }
+                    `}
                   >
-                    <Link
-                      to={item.path}
-                      className={`
-                        flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
-                        ${isActive
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/50 scale-105'
-                          : 'hover:bg-gray-700'
-                        }
-                      `}
-                    >
-                      <Icon className="w-5 h-5" />
-                      <span className="font-medium">{item.label}</span>
-                      {isActive && (
-                        <motion.div
-                          layoutId="activeIndicator"
-                          className="ml-auto w-2 h-2 bg-white rounded-full"
-                        />
-                      )}
-                    </Link>
-                  </motion.div>
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-[#008060]' : 'text-slate-500'}`} />
+                    <span>{item.label}</span>
+                  </Link>
                 );
               })}
             </nav>
 
-            {/* Logout Button */}
-            <div className="p-4 border-t border-gray-700">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+            {/* Logout anchor footer */}
+            <div className="p-3 border-t border-[#262626]">
+              <button
                 onClick={handleLogout}
-                className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-red-600 hover:bg-red-700 transition-colors duration-200"
+                className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-lg text-xs font-bold text-rose-400 hover:text-white hover:bg-rose-950/40 border border-rose-900/30 transition-all"
               >
-                <LogOut className="w-5 h-5" />
-                <span className="font-medium">Logout</span>
-              </motion.button>
+                <LogOut className="w-4 h-4 text-rose-400" />
+                <span>Sign Out</span>
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Mobile Menu Overlay */}
+      {/* Mobile Drawer Slide Navigation */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <>
@@ -639,34 +604,35 @@ const AdminHome = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+              className="lg:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-xs"
               onClick={() => setMobileMenuOpen(false)}
             />
             <motion.div
-              initial={{ x: -300 }}
+              initial={{ x: -280 }}
               animate={{ x: 0 }}
-              exit={{ x: -300 }}
-              transition={{ duration: 0.3 }}
-              className="lg:hidden fixed left-0 top-0 bottom-0 w-72 bg-gray-900 text-white z-50 flex flex-col shadow-2xl"
+              exit={{ x: -280 }}
+              transition={{ type: "spring", stiffness: 250, damping: 25 }}
+              className="lg:hidden fixed left-0 top-0 bottom-0 w-64 bg-[#1a1a1a] text-slate-300 z-50 flex flex-col border-r border-[#262626] shadow-2xl"
             >
-              {/* Mobile Logo & Close */}
-              <div className="p-6 border-b border-gray-700 flex items-center justify-between">
+              <div className="p-5 border-b border-[#262626] flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                    <Package className="w-6 h-6" />
+                  <div className="w-8 h-8 bg-[#008060] rounded-lg flex items-center justify-center border border-emerald-600">
+                    <Package className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Shop Admin</h2>
-                    <p className="text-xs text-gray-400">Management Panel</p>
+                    <h2 className="text-sm font-extrabold text-white leading-tight uppercase tracking-wider">KamiKoto</h2>
+                    <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase">Admin</p>
                   </div>
                 </div>
-                <button onClick={() => setMobileMenuOpen(false)}>
-                  <X className="w-6 h-6" />
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-[#262626]"
+                >
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Mobile Navigation */}
-              <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+              <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
                 {menuItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path ||
@@ -678,28 +644,27 @@ const AdminHome = () => {
                       to={item.path}
                       onClick={() => setMobileMenuOpen(false)}
                       className={`
-                        flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
+                        flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all border-l-4
                         ${isActive
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg'
-                          : 'hover:bg-gray-700'
+                          ? 'bg-[#262626] text-white border-l-[#008060]'
+                          : 'text-slate-400 hover:text-white hover:bg-[#262626]/40 border-l-transparent'
                         }
                       `}
                     >
-                      <Icon className="w-5 h-5" />
-                      <span className="font-medium">{item.label}</span>
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-[#008060]' : 'text-slate-500'}`} />
+                      <span>{item.label}</span>
                     </Link>
                   );
                 })}
               </nav>
 
-              {/* Mobile Logout */}
-              <div className="p-4 border-t border-gray-700">
+              <div className="p-3 border-t border-[#262626]">
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-red-600 hover:bg-red-700 transition-colors duration-200"
+                  className="flex items-center gap-3 w-full px-3.5 py-2.5 rounded-lg text-xs font-bold text-rose-400 hover:text-white hover:bg-rose-950/40 border border-rose-900/30 transition-all"
                 >
-                  <LogOut className="w-5 h-5" />
-                  <span className="font-medium">Logout</span>
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
                 </button>
               </div>
             </motion.div>
@@ -707,44 +672,41 @@ const AdminHome = () => {
         )}
       </AnimatePresence>
 
-      {/* Main Content Area */}
+      {/* Main Panel Frame */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        {/* Top Header Navigation bar */}
+        <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
+              className="lg:hidden p-1.5 hover:bg-slate-100 rounded-lg text-slate-600"
             >
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5" />
             </button>
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="hidden lg:block p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+              className="hidden lg:block p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
             >
-              <Menu className="w-6 h-6 text-gray-600" />
+              <Menu className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">
-                {menuItems.find(item => item.path === location.pathname)?.label || 'Dashboard'}
+              <h1 className="text-base font-extrabold text-slate-900 tracking-tight leading-snug">
+                {menuItems.find(item => item.path === location.pathname || (item.path !== '/' && location.pathname.startsWith(item.path)))?.label || 'Dashboard'}
               </h1>
-              <p className="text-sm text-gray-500">Manage your store efficiently</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5 hidden sm:block">KamiKoto control panel</p>
             </div>
           </div>
+
           <div className="flex items-center gap-3">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="p-2 hover:bg-gray-100 rounded-lg relative"
-            >
-              <Bell className="w-6 h-6 text-gray-600" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </motion.button>
+            <button className="p-2 hover:bg-slate-100 rounded-lg relative text-slate-600">
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-[#008060] rounded-full animate-pulse"></span>
+            </button>
           </div>
         </div>
 
-        {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Dynamic Nested View content */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#f6f6f7]">
           {!isManageRoute && location.pathname === "/" ? (
             <AdminDashboard />
           ) : (

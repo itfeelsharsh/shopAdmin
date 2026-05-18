@@ -6,16 +6,28 @@
 /**
  * Format a number to Indian numbering system (with commas)
  * e.g., 123456.78 becomes 1,23,456.78
- * @param {number} amount - The amount to format
+ * @param {number|string} amount - The amount to format
  * @param {number} decimals - Number of decimal places (default: 2)
  * @returns {string} - Formatted number string
  */
 export const formatIndianNumber = (amount, decimals = 2) => {
+  // Gracefully handle null, undefined, NaN, or non-numeric inputs
+  let parsedAmount = parseFloat(amount);
+  if (amount === null || amount === undefined || isNaN(parsedAmount)) {
+    parsedAmount = 0;
+  }
+  
   // Convert to string with fixed decimals
-  const formattedNumber = parseFloat(amount).toFixed(decimals);
+  const formattedNumber = parsedAmount.toFixed(decimals);
   
   // Split the whole and decimal parts
   let [wholePart, decimalPart] = formattedNumber.split('.');
+  
+  // Handle potential negative numbers
+  const isNegative = wholePart.startsWith('-');
+  if (isNegative) {
+    wholePart = wholePart.substring(1);
+  }
   
   // Format the whole part with Indian grouping
   let lastThree = wholePart.substring(wholePart.length - 3);
@@ -34,12 +46,12 @@ export const formatIndianNumber = (amount, decimals = 2) => {
     wholePart = formattedRemaining + ',' + lastThree;
   }
   
-  return `${wholePart}${decimalPart ? '.' + decimalPart : ''}`;
+  return `${isNegative ? '-' : ''}${wholePart}${decimalPart ? '.' + decimalPart : ''}`;
 };
 
 /**
  * Format a currency amount to Indian Rupees format
- * @param {number} amount - The amount to format
+ * @param {number|string} amount - The amount to format
  * @param {number} decimals - Number of decimal places (default: 2)
  * @returns {string} - Formatted currency string with ₹ symbol
  */
@@ -49,36 +61,49 @@ export const formatCurrency = (amount, decimals = 2) => {
 
 /**
  * Convert a number to lakhs format
- * @param {number} value - The value to format
+ * @param {number|string} value - The value to format
  * @param {number} decimals - Number of decimal places (default: 1)
  * @returns {string} - Formatted string with 'lakh' suffix
  */
 export const formatLakhs = (value, decimals = 1) => {
-  return `₹${(value/100000).toFixed(decimals)} lakh`;
+  let parsedValue = parseFloat(value);
+  if (value === null || value === undefined || isNaN(parsedValue)) {
+    parsedValue = 0;
+  }
+  return `₹${(parsedValue / 100000).toFixed(decimals)} lakh`;
 };
 
 /**
  * Convert a number to crores format
- * @param {number} value - The value to format
+ * @param {number|string} value - The value to format
  * @param {number} decimals - Number of decimal places (default: 2)
  * @returns {string} - Formatted string with 'crore' suffix
  */
 export const formatCrores = (value, decimals = 2) => {
-  return `₹${(value/10000000).toFixed(decimals)} crore`;
+  let parsedValue = parseFloat(value);
+  if (value === null || value === undefined || isNaN(parsedValue)) {
+    parsedValue = 0;
+  }
+  return `₹${(parsedValue / 10000000).toFixed(decimals)} crore`;
 };
 
 /**
  * Intelligently format large numbers using the Indian system
  * Automatically chooses between regular format, lakhs, and crores based on the number size
- * @param {number} value - The value to format
+ * @param {number|string} value - The value to format
  * @returns {string} - Formatted string with appropriate suffix
  */
 export const formatSmartIndian = (value) => {
-  if (value >= 10000000) {
-    return formatCrores(value);
-  } else if (value >= 100000) {
-    return formatLakhs(value);
-  } else {
-    return formatCurrency(value);
+  let parsedValue = parseFloat(value);
+  if (value === null || value === undefined || isNaN(parsedValue)) {
+    parsedValue = 0;
   }
-}; 
+  
+  if (parsedValue >= 10000000) {
+    return formatCrores(parsedValue);
+  } else if (parsedValue >= 100000) {
+    return formatLakhs(parsedValue);
+  } else {
+    return formatCurrency(parsedValue);
+  }
+};

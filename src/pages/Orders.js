@@ -71,6 +71,7 @@ function Orders() {
   const [isModalOpen, setIsModalOpen] = useState(false);     // Modal visibility state
   const [modalMode, setModalMode] = useState('view');        // Modal mode: 'view', 'edit', 'shipping'
   const [processingAction, setProcessingAction] = useState(false); // Action processing state
+  const [processingOrderState, setProcessingOrderState] = useState({ id: null, status: null }); // Track current processing action
   
   // Bulk operations state management - Initialize with proper Set object
   const [selectedOrderIds, setSelectedOrderIds] = useState(() => new Set()); // Selected orders for bulk operations
@@ -425,7 +426,6 @@ function Orders() {
   useEffect(() => {
     console.log('🔄 Orders: Component mounted, initiating data fetch');
     
-    // Add error handling to prevent component crashes
     const safeFetchOrders = async () => {
       try {
         await fetchOrders();
@@ -439,20 +439,95 @@ function Orders() {
     safeFetchOrders();
     
     // Set up auto-refresh for real-time updates (every 5 minutes)
-    // Use ref to access the latest fetchOrders function without causing dependency issues
     const refreshInterval = setInterval(() => {
       if (fetchOrdersRef.current) {
         fetchOrdersRef.current();
       }
     }, 5 * 60 * 1000);
     
-    // Cleanup interval on component unmount
     return () => {
       clearInterval(refreshInterval);
       console.log('🧹 Orders: Component unmounted, cleaning up resources');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array - only run on mount/unmount
+  }, []); 
+
+  /**
+   * Filter and Search Reactive Effects
+   * Triggers database-wide queries whenever filters change
+   */
+  useEffect(() => {
+    // Prevent fetching if search term is active, as it will be handled by the debounced search effect
+    if (filters.searchTerm && filters.searchTerm.trim() !== "") {
+      return;
+    }
+    
+    console.log('🔄 Orders: Filter values changed, triggering database-wide refetch...');
+    setPagination(prev => ({ ...prev, lastDoc: null, currentPage: 1 }));
+    
+    const refetchOnFilter = async () => {
+      try {
+        setLoading(true);
+        const result = await AdminOrderService.getAllOrders(filters, {
+          limit: pagination.limit,
+          lastDoc: null
+        });
+        if (result.success) {
+          setOrders(result.orders);
+          setPagination(prev => ({
+            ...prev,
+            lastDoc: result.lastDoc,
+            hasMore: result.hasMore,
+            currentPage: 1
+          }));
+        }
+      } catch (error) {
+        console.error('❌ Orders: Error refetching on filter change:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    refetchOnFilter();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.status, filters.priority, filters.minAmount, filters.startDate, filters.endDate, filters.orderBy, filters.orderDirection]);
+
+  // Debounced effect for search input to prevent Firestore spam
+  useEffect(() => {
+    if (!filters.searchTerm || filters.searchTerm.trim() === "") {
+      // If search was cleared, let the main filter effect handle loading the standard list
+      return;
+    }
+    
+    const delayDebounceFn = setTimeout(async () => {
+      console.log('🔍 Orders: Search query changed, running debounced database-wide query for:', filters.searchTerm);
+      setPagination(prev => ({ ...prev, lastDoc: null, currentPage: 1 }));
+      
+      try {
+        setLoading(true);
+        const result = await AdminOrderService.getAllOrders(filters, {
+          limit: pagination.limit,
+          lastDoc: null
+        });
+        if (result.success) {
+          setOrders(result.orders);
+          setPagination(prev => ({
+            ...prev,
+            lastDoc: result.lastDoc,
+            hasMore: result.hasMore,
+            currentPage: 1
+          }));
+        }
+      } catch (error) {
+        console.error('❌ Orders: Error during search refetch:', error);
+      } finally {
+        setLoading(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.searchTerm]);
 
   /**
    * Filter application effect
@@ -461,7 +536,7 @@ function Orders() {
   useEffect(() => {
     console.log('🔍 Orders: Applying filters to orders list');
     applyFilters();
-  }, [orders, filters, applyFilters]); // Added applyFilters back to dependency array
+  }, [orders, filters, applyFilters]);
 
   /**
    * Update order status in Firestore (simplified approach from original code)
@@ -474,6 +549,7 @@ function Orders() {
     
     try {
       setProcessingAction(true);
+      setProcessingOrderState({ id: orderId, status: newStatus });
       
       // Get current order data
       const orderRef = doc(db, "orders", orderId);
@@ -494,9 +570,14 @@ function Orders() {
         
         if (!confirmed) {
           console.log('❌ Orders: Status update cancelled by user');
+          setProcessingAction(false);
+          setProcessingOrderState({ id: null, status: null });
           return;
         }
       }
+      
+      // Add deliberate 2-second delay for smooth, professional action transitions
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Create status history entry
       const statusUpdate = {
@@ -556,6 +637,7 @@ function Orders() {
       toast.error(error.message);
     } finally {
       setProcessingAction(false);
+      setProcessingOrderState({ id: null, status: null });
     }
   };
 
@@ -596,7 +678,7 @@ function Orders() {
       const result = await sendUserNotification(order.userId, {
         title: `Order Update: ${statusLabel}`,
         body: `Your order #${order.orderId || order.id} status has been updated to ${statusLabel}.`,
-        link: `/account/orders/${order.id}`,
+        link: `/my-account/orders`,
         type
       });
       if (result.success) {
@@ -630,6 +712,10 @@ function Orders() {
     
     try {
       setProcessingAction(true);
+      setProcessingOrderState({ id: selectedOrder.id, status: 'Shipped' });
+      
+      // Add deliberate 2-second delay for smooth, professional action transitions
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Update order with tracking info
       const orderRef = doc(db, "orders", selectedOrder.id);
@@ -707,6 +793,7 @@ function Orders() {
       }
     } finally {
       setProcessingAction(false);
+      setProcessingOrderState({ id: null, status: null });
     }
   };
 
@@ -1431,7 +1518,7 @@ function Orders() {
                               disabled={processingAction}
                               title="Approve order"
                             >
-                              Approve
+                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.APPROVED ? 'Approving...' : 'Approve'}
                             </button>
                             <button
                               onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.DECLINED, {
@@ -1441,7 +1528,7 @@ function Orders() {
                               disabled={processingAction}
                               title="Decline order"
                             >
-                              Decline
+                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DECLINED ? 'Declining...' : 'Decline'}
                             </button>
                           </>
                         )}
@@ -1453,7 +1540,7 @@ function Orders() {
                             disabled={processingAction}
                             title="Mark as packed"
                           >
-                            Mark Packed
+                            {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.PACKED ? 'Packing...' : 'Mark Packed'}
                           </button>
                         )}
                         
@@ -1464,7 +1551,7 @@ function Orders() {
                             disabled={processingAction}
                             title="Add shipping information"
                           >
-                            Add Shipping
+                            {processingOrderState.id === order.id && processingOrderState.status === 'Shipped' ? 'Shipping...' : 'Add Shipping'}
                           </button>
                         )}
                         
@@ -1475,7 +1562,7 @@ function Orders() {
                             disabled={processingAction}
                             title="Mark as delivered"
                           >
-                            Mark Delivered
+                            {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? 'Delivering...' : 'Mark Delivered'}
                           </button>
                         )}
                       </div>
@@ -2047,14 +2134,14 @@ function Orders() {
                             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                             disabled={processingAction}
                           >
-                            Approve Order
+                            {processingOrderState.id === selectedOrder.id && processingOrderState.status === ORDER_STATUSES.APPROVED ? 'Approving...' : 'Approve Order'}
                           </button>
                           <button
                             onClick={() => updateOrderStatus(selectedOrder.id, ORDER_STATUSES.DECLINED)}
                             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                             disabled={processingAction}
                           >
-                            Decline Order
+                            {processingOrderState.id === selectedOrder.id && processingOrderState.status === ORDER_STATUSES.DECLINED ? 'Declining...' : 'Decline Order'}
                           </button>
                         </>
                       )}
@@ -2065,7 +2152,7 @@ function Orders() {
                           className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                           disabled={processingAction}
                         >
-                          Mark as Packed
+                          {processingOrderState.id === selectedOrder.id && processingOrderState.status === ORDER_STATUSES.PACKED ? 'Packing...' : 'Mark as Packed'}
                         </button>
                       )}
                       
@@ -2075,7 +2162,7 @@ function Orders() {
                           className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
                           disabled={processingAction}
                         >
-                          Add Shipping
+                          {processingOrderState.id === selectedOrder.id && processingOrderState.status === 'Shipped' ? 'Shipping...' : 'Add Shipping'}
                         </button>
                       )}
                       
@@ -2085,7 +2172,7 @@ function Orders() {
                           className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                           disabled={processingAction}
                         >
-                          Mark as Delivered
+                          {processingOrderState.id === selectedOrder.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? 'Delivering...' : 'Mark as Delivered'}
                         </button>
                       )}
                     </div>
