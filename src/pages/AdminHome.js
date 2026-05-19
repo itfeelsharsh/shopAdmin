@@ -535,7 +535,7 @@ const AdminHome = () => {
   const isManageRoute = location.pathname !== '/';
 
   return (
-    <div className="flex h-screen bg-[#f6f6f7] font-sans antialiased text-slate-900 select-none">
+    <div className="flex h-screen bg-[#f6f6f7] font-sans antialiased text-slate-900">
       {/* Desktop side navigation */}
       <AnimatePresence>
         {sidebarOpen && (
