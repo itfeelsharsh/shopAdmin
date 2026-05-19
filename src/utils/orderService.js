@@ -38,6 +38,45 @@ import {
 import { db } from '../firebase';
 
 /**
+ * Resolves the order total amount from various formats/fields
+ * @param {object} order - The raw order document data
+ * @returns {number} - The calculated or extracted order total
+ */
+export const getOrderTotal = (order) => {
+  if (!order) return 0;
+  
+  const possibleTotalFields = [
+    order.total,
+    order.amount,
+    order.grandTotal,
+    order.finalAmount,
+    order.orderTotal,
+    order.financials?.total,
+    order.payment?.amount,
+    order.summary?.total,
+    order.pricing?.total
+  ];
+
+  for (const field of possibleTotalFields) {
+    if (field !== null && field !== undefined && field !== 0 && !isNaN(field)) {
+      return Number(field);
+    }
+  }
+
+  if (order.items && Array.isArray(order.items)) {
+    const calculatedTotal = order.items.reduce((sum, item) => {
+      const itemTotal = (item.price || 0) * (item.quantity || 0);
+      return sum + itemTotal;
+    }, 0);
+    if (calculatedTotal > 0) {
+      return calculatedTotal;
+    }
+  }
+  return 0;
+};
+
+
+/**
  * Order status constants for consistent admin management
  * These align with the main application's order statuses
  */
@@ -200,16 +239,21 @@ class AdminOrderService {
       }
 
       // Server-side search optimizations for specific lookups (Email, Phone, OrderID)
+      let isOptimizedSearch = false;
       if (filters.searchTerm) {
         const term = filters.searchTerm.trim();
         if (term.includes('@')) {
           ordersQuery = query(ordersQuery, where("userEmail", "==", term));
-        } else if (/^\+?[0-9\s\-]+$/.test(term) && term.length >= 8) {
+          isOptimizedSearch = true;
+        } else if (/^\+?[0-9\s-]+$/.test(term) && term.length >= 8) {
           ordersQuery = query(ordersQuery, where("userPhone", "==", term));
+          isOptimizedSearch = true;
         } else if (term.toUpperCase().startsWith("KAMI-")) {
           ordersQuery = query(ordersQuery, where("orderId", "==", term));
+          isOptimizedSearch = true;
         } else if (term.length === 20) {
           ordersQuery = query(ordersQuery, where("orderId", "==", term));
+          isOptimizedSearch = true;
         }
       }
       
@@ -251,7 +295,9 @@ class AdminOrderService {
       // Apply pagination/bounds for performance optimization
       // Bounding queries prevents Firebase API quota exhaustion
       if (pagination.limit) {
-        const maxLimit = filters.searchTerm ? 80 : pagination.limit;
+        const maxLimit = filters.searchTerm 
+          ? (isOptimizedSearch ? pagination.limit : 500) 
+          : pagination.limit;
         ordersQuery = query(ordersQuery, limit(maxLimit));
         
         // Handle pagination cursor for large datasets
@@ -289,7 +335,7 @@ class AdminOrderService {
           id: doc.id,
           ...data,
           // Ensure consistent data structure for admin interface
-          total: data.financials?.total || data.total || data.amount || 0,
+          total: getOrderTotal(data),
           subtotal: data.financials?.subtotal || data.subtotal || 0,
           orderDate: orderDate,
           // Calculate order age for processing prioritization

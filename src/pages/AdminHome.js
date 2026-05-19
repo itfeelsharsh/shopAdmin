@@ -4,21 +4,27 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import { collection, getDocs, query, orderBy, limit, getCountFromServer, where } from 'firebase/firestore';
 import { db } from "../firebase";
-import { formatCurrency, formatLakhs } from "../utils/formatUtils";
+import { formatCurrency, formatSmartIndian } from "../utils/formatUtils";
+import { getOrderTotal } from "../utils/orderService";
 import {
   Home, Package, Users, ShoppingBag, Tag, Image as ImageIcon,
   Bell, LogOut, TrendingUp, DollarSign, ShoppingCart, Menu, X,
   ChevronRight, Activity, Smartphone
 } from "react-feather";
-import { Card, LoadingSpinner, Badge } from "../components/ui";
+import { LoadingSpinner } from "../components/ui";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Area,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 
-// Import Recharts components dynamically or handle require safely
-const ChartComponents = () => {
-  const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, Area, AreaChart } = require('recharts');
-  return {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, Area, AreaChart
-  };
-};
 
 /**
  * Enhanced Shopify Stat Card
@@ -80,18 +86,7 @@ const AdminDashboard = () => {
     newUsersThisMonth: 0
   });
 
-  const [chartsReady, setChartsReady] = useState(false);
-  const [Charts, setCharts] = useState(null);
 
-  useEffect(() => {
-    try {
-      const charts = ChartComponents();
-      setCharts(charts);
-      setChartsReady(true);
-    } catch (e) {
-      console.error("Failed to load charting library:", e);
-    }
-  }, []);
 
   const COLORS = ['#008060', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#6B7280'];
   const STATUS_COLORS = {
@@ -144,12 +139,18 @@ const AdminDashboard = () => {
           month.setMonth(now.getMonth() - i);
           const monthKey = `${month.getFullYear()}-${month.getMonth() + 1}`;
           const monthName = month.toLocaleString('default', { month: 'short' });
-          monthlyData[monthKey] = { month: monthName, year: month.getFullYear(), revenue: 0, orders: 0 };
+          monthlyData[monthKey] = {
+            month: monthName,
+            monthNum: month.getMonth(),
+            year: month.getFullYear(),
+            revenue: 0,
+            orders: 0
+          };
         }
 
         const orders = ordersSnapshot.docs.map(doc => {
           const data = doc.data();
-          const orderTotal = data.total || data.amount || 0;
+          const orderTotal = getOrderTotal(data);
           
           let orderDate = null;
           if (data.createdAt && typeof data.createdAt.toDate === 'function') {
@@ -158,6 +159,8 @@ const AdminDashboard = () => {
             orderDate = new Date(data.createdAt);
           } else if (data.orderDate) {
             orderDate = new Date(data.orderDate);
+          } else if (data.timestamp) {
+            orderDate = new Date(data.timestamp);
           }
           
           const status = data.status || "Placed";
@@ -200,7 +203,7 @@ const AdminDashboard = () => {
         // Format Monthly Array
         const monthlyArray = Object.values(monthlyData).sort((a, b) => {
           return a.year === b.year
-            ? new Date(0, a.month, 0) - new Date(0, b.month, 0)
+            ? a.monthNum - b.monthNum
             : a.year - b.year;
         });
 
@@ -298,7 +301,7 @@ const AdminDashboard = () => {
           value={formatCurrency(orderStats.totalRevenue)}
           icon={DollarSign}
           color="green"
-          trend={orderStats.monthlyRevenue > 0 ? `+${formatCurrency(orderStats.monthlyRevenue)} this month` : undefined}
+          trend={orderStats.monthlyRevenue >= 0 ? `+${formatCurrency(orderStats.monthlyRevenue)} this month` : undefined}
           loading={loading}
         />
         <StatCard
@@ -319,7 +322,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Polaris Charting Layout */}
-      {chartsReady && Charts && (
+      {!loading && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Monthly Revenue Chart */}
           <div className="lg:col-span-2">
@@ -330,8 +333,8 @@ const AdminDashboard = () => {
               </div>
               {monthlyRevenue.length > 0 ? (
                 <div className="h-72 w-full text-xs">
-                  <Charts.ResponsiveContainer width="100%" height="100%">
-                    <Charts.AreaChart
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
                       data={monthlyRevenue}
                       margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                     >
@@ -341,14 +344,14 @@ const AdminDashboard = () => {
                           <stop offset="95%" stopColor="#008060" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <Charts.CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <Charts.XAxis dataKey="month" stroke="#94a3b8" />
-                      <Charts.YAxis
-                        tickFormatter={(value) => formatLakhs(value)}
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" stroke="#94a3b8" />
+                      <YAxis
+                        tickFormatter={(value) => formatSmartIndian(value)}
                         stroke="#94a3b8"
                       />
-                      <Charts.Tooltip content={<CustomTooltip />} />
-                      <Charts.Area
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area
                         type="monotone"
                         dataKey="revenue"
                         name="Revenue"
@@ -357,8 +360,8 @@ const AdminDashboard = () => {
                         fillOpacity={1}
                         fill="url(#colorRevenue)"
                       />
-                    </Charts.AreaChart>
-                  </Charts.ResponsiveContainer>
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
               ) : (
                 <div className="text-center py-12 text-slate-400 text-sm">No recent transactions to aggregate.</div>
@@ -376,9 +379,9 @@ const AdminDashboard = () => {
               {statusDistribution.length > 0 ? (
                 <div className="flex-1 flex flex-col justify-center items-center">
                   <div className="h-44 w-full">
-                    <Charts.ResponsiveContainer width="100%" height="100%">
-                      <Charts.PieChart>
-                        <Charts.Pie
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
                           data={statusDistribution}
                           cx="50%"
                           cy="50%"
@@ -389,15 +392,15 @@ const AdminDashboard = () => {
                           nameKey="status"
                         >
                           {statusDistribution.map((entry, index) => (
-                            <Charts.Cell
+                            <Cell
                               key={`cell-${index}`}
                               fill={STATUS_COLORS[entry.status] || COLORS[index % COLORS.length]}
                             />
                           ))}
-                        </Charts.Pie>
-                        <Charts.Tooltip />
-                      </Charts.PieChart>
-                    </Charts.ResponsiveContainer>
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
                   {/* Legend list */}
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 w-full mt-4 text-xs font-semibold text-slate-600">

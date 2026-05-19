@@ -29,7 +29,8 @@ import 'react-toastify/dist/ReactToastify.css';
 import AdminOrderService, { 
   ORDER_STATUSES, 
   ORDER_PRIORITIES, 
-  SHIPPING_CARRIERS 
+  SHIPPING_CARRIERS,
+  getOrderTotal as getOrderTotalShared
 } from "../utils/orderService";
 import { resendOrderConfirmationEmail, sendOrderStatusEmail } from "../utils/emailService";
 import { sendUserNotification } from "../utils/notificationService";
@@ -287,48 +288,7 @@ function Orders() {
    * Different orders might store total in different fields
    */
   const getOrderTotal = useCallback((order) => {
-    // Try different possible fields where total might be stored
-    const possibleTotalFields = [
-      order.total,
-      order.amount,
-      order.grandTotal,
-      order.finalAmount,
-      order.orderTotal,
-      order.financials?.total,
-      order.payment?.amount,
-      order.summary?.total,
-      order.pricing?.total
-    ];
-
-    // Find the first non-zero, non-null, non-undefined value
-    for (const field of possibleTotalFields) {
-      if (field !== null && field !== undefined && field !== 0 && !isNaN(field)) {
-        return Number(field);
-      }
-    }
-
-    // If all fields are 0 or undefined, calculate from items if available
-    if (order.items && Array.isArray(order.items)) {
-      const calculatedTotal = order.items.reduce((sum, item) => {
-        const itemTotal = (item.price || 0) * (item.quantity || 0);
-        return sum + itemTotal;
-      }, 0);
-      
-      if (calculatedTotal > 0) {
-        console.log(`Orders: Calculated total ${calculatedTotal} from items for order ${order.id}`);
-        return calculatedTotal;
-      }
-    }
-
-    console.warn(`Orders: Could not determine total for order ${order.id}:`, {
-      total: order.total,
-      amount: order.amount,
-      financials: order.financials,
-      payment: order.payment,
-      itemsCount: order.items?.length || 0
-    });
-
-    return 0;
+    return getOrderTotalShared(order);
   }, []);
 
   /**
@@ -1377,7 +1337,7 @@ function Orders() {
         ) : (
           <>
             {/* Table Header */}
-            <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+            <div className="hidden md:block bg-gray-50 border-b border-gray-200 px-6 py-4">
               <div className={`grid gap-6 items-center font-semibold text-gray-700 text-sm uppercase tracking-wide ${
                 bulkOperationMode ? 'grid-cols-8' : 'grid-cols-7'
               }`}>
@@ -1418,11 +1378,12 @@ function Orders() {
                 return (
                   <div 
                     key={order.id} 
-                    className={`px-6 py-5 hover:bg-gray-50 transition-all duration-150 ${
+                    className={`px-6 py-5 hover:bg-gray-50 transition-all duration-150 border-b border-gray-100 ${
                       isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''
                     }`}
                   >
-                    <div className={`grid gap-6 items-center ${
+                    {/* Desktop Layout (Hidden on Mobile) */}
+                    <div className={`hidden md:grid gap-6 items-center ${
                       bulkOperationMode ? 'grid-cols-8' : 'grid-cols-7'
                     }`}>
                       {/* Bulk selection checkbox */}
@@ -1500,7 +1461,6 @@ function Orders() {
                       
                       {/* Actions Column */}
                       <div className="flex items-center gap-2">
-                        {/* View Details Button */}
                         <button
                           onClick={() => openOrderModal(order, 'view')}
                           className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200 transition-colors"
@@ -1509,7 +1469,6 @@ function Orders() {
                           View Details
                         </button>
                         
-                        {/* Status-specific action buttons */}
                         {order.status === ORDER_STATUSES.PLACED && (
                           <>
                             <button
@@ -1565,6 +1524,117 @@ function Orders() {
                             {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? 'Delivering...' : 'Mark Delivered'}
                           </button>
                         )}
+                      </div>
+                    </div>
+
+                    {/* Mobile Layout (Visible on Mobile Only) */}
+                    <div className="md:hidden flex flex-col space-y-4">
+                      {/* Top Row: Order ID, Status, Selection */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {bulkOperationMode && (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleOrderSelection(order.id, isSelected)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                            />
+                          )}
+                          <span className="font-bold text-slate-900 text-base">#{order.orderId || order.id}</span>
+                        </div>
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${statusConfig.color}`}>
+                          {statusConfig.label}
+                        </span>
+                      </div>
+
+                      {/* Middle Area: Customer, Items Count, Tracking, Date & Total */}
+                      <div className="grid grid-cols-2 gap-4 text-sm border-t border-b border-slate-100 py-3">
+                        <div className="space-y-1">
+                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Customer</p>
+                          <p className="font-semibold text-slate-800 truncate">{order.userName || 'Unknown Customer'}</p>
+                          <p className="text-xs text-slate-500 truncate">{order.userEmail}</p>
+                          {order.tracking?.code && (
+                            <div className="mt-1.5 text-[10px] text-blue-600 font-mono bg-blue-50 px-2 py-0.5 rounded inline-block max-w-full truncate">
+                              {order.tracking.code}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right space-y-1">
+                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Total Amount</p>
+                          <p className="font-bold text-slate-900 text-lg">{formatPrice(getOrderTotal(order))}</p>
+                          <p className="text-xs text-slate-500">{order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+
+                      {/* Bottom row: Priority, Date, Actions */}
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex items-center self-start px-2 py-0.5 rounded text-[11px] font-bold tracking-wide uppercase ${priorityConfig.color}`}>
+                            {priorityConfig.label}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            {formatDate(order.orderDate || order.createdAt)}
+                          </span>
+                        </div>
+
+                        {/* Actions block */}
+                        <div className="flex flex-wrap gap-1.5 justify-end">
+                          <button
+                            onClick={() => openOrderModal(order, 'view')}
+                            className="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200"
+                          >
+                            Details
+                          </button>
+                          
+                          {order.status === ORDER_STATUSES.PLACED && (
+                            <>
+                              <button
+                                onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.APPROVED)}
+                                className="px-2.5 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"
+                                disabled={processingAction}
+                              >
+                                {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.APPROVED ? '...' : 'Approve'}
+                              </button>
+                              <button
+                                onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.DECLINED, { reason: 'Declined by admin' })}
+                                className="px-2.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700"
+                                disabled={processingAction}
+                              >
+                                {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DECLINED ? '...' : 'Decline'}
+                              </button>
+                            </>
+                          )}
+
+                          {order.status === ORDER_STATUSES.APPROVED && (
+                            <button
+                              onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.PACKED)}
+                              className="px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700"
+                              disabled={processingAction}
+                            >
+                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.PACKED ? '...' : 'Pack'}
+                            </button>
+                          )}
+
+                          {order.status === ORDER_STATUSES.PACKED && (
+                            <button
+                              onClick={() => openOrderModal(order, 'shipping')}
+                              className="px-2.5 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700"
+                              disabled={processingAction}
+                            >
+                              Ship
+                            </button>
+                          )}
+
+                          {order.status === ORDER_STATUSES.SHIPPED && (
+                            <button
+                              onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.DELIVERED)}
+                              className="px-2.5 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"
+                              disabled={processingAction}
+                            >
+                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? '...' : 'Deliver'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

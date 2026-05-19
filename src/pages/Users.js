@@ -21,6 +21,7 @@ import {
 import { Modal, Button, LoadingSpinner, Badge } from "../components/ui";
 import { toast } from "react-toastify";
 import { formatCurrency } from "../utils/formatUtils";
+import { getOrderTotal } from "../utils/orderService";
 
 /**
  * Shopify Polaris Inspired Paginated Users Management Page
@@ -154,8 +155,7 @@ const Users = () => {
           });
           
           const totalSpent = userOrders.reduce((sum, order) => {
-            const amount = order.total || order.amount || order.grandTotal || 0;
-            return sum + amount;
+            return sum + getOrderTotal(order);
           }, 0);
           
           const orderCount = userOrders.length;
@@ -535,121 +535,220 @@ const Users = () => {
 
       {/* Polaris Table Container */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-[#f9fafb]">
-              <tr>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Contact info
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Auth Method
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Orders & Value
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Last Login
-                </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Account Status
-                </th>
-                <th className="px-6 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+        {filteredUsers.length === 0 ? (
+          <div className="text-center py-16 bg-white">
+            <AlertTriangle className="w-10 h-10 text-slate-300 mx-auto mb-3 animate-pulse" />
+            <p className="text-slate-500 font-semibold text-base">No customers found</p>
+            <p className="text-slate-400 text-xs mt-1">Try updating your filters or searching another keyword.</p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-[#f9fafb]">
+                  <tr>
+                    <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Customer
+                    </th>
+                    <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Contact info
+                    </th>
+                    <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Auth Method
+                    </th>
+                    <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Orders & Value
+                    </th>
+                    <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Last Login
+                    </th>
+                    <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Account Status
+                    </th>
+                    <th className="px-6 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  <AnimatePresence>
+                    {filteredUsers.map((user) => (
+                      <motion.tr
+                        key={user.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="hover:bg-slate-50 transition-colors duration-150"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="relative cursor-pointer group"
+                              onClick={() => user.profilePic && viewProfilePic(user)}
+                            >
+                              {user.profilePic ? (
+                                <img
+                                  src={user.profilePic}
+                                  alt={user.name}
+                                  className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-100 group-hover:ring-[#008060] transition-all duration-200"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                                  <span className="text-slate-700 font-bold text-sm">
+                                    {user.name?.charAt(0).toUpperCase() || "?"}
+                                  </span>
+                                </div>
+                              )}
+                              {user.profilePic && (
+                                <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                                  <Eye className="w-4 h-4 text-white" />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900 leading-snug">{user.name || "Anonymous User"}</p>
+                              <p className="text-xs text-slate-400">ID: {user.id.substring(0, 8)}</p>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <Mail className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{user.email || "N/A"}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <Phone className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{user.phone || "N/A"}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Badge
+                            variant="neutral"
+                            icon={getProviderIcon(user.provider)}
+                            className="bg-slate-100 text-slate-700 border border-slate-200 text-xs px-2 py-0.5 rounded-full capitalize flex items-center gap-1"
+                          >
+                            {user.provider || "email"}
+                          </Badge>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1 text-xs text-slate-700">
+                              <Package className="w-3.5 h-3.5 text-slate-400" />
+                              <span className="font-semibold">{user.orderCount || 0} orders</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-slate-500">
+                              <ShoppingBag className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Spent: {formatCurrency(user.totalSpent || 0)}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
+                          <div className="flex items-center gap-1.5">
+                            <LogIn className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{formatDate(user.lastLogin)}</span>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                              user.isBanned
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : "bg-green-50 text-green-700 border-green-200"
+                            }`}
+                          >
+                            {user.isBanned ? "Disabled" : "Active"}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => viewUserDetails(user)}
+                              icon={<Eye className="w-4 h-4 text-slate-600" />}
+                              className="border-gray-200 hover:bg-slate-50 py-1"
+                            />
+                            <button
+                              onClick={() => toggleUserStatus(user.id, user.isBanned)}
+                              disabled={processingAction}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all duration-200 ${
+                                user.isBanned
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                  : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                              } disabled:opacity-50`}
+                            >
+                              {processingUser === user.id ? (
+                                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : user.isBanned ? (
+                                <CheckCircle className="w-3.5 h-3.5" />
+                              ) : (
+                                <UserX className="w-3.5 h-3.5" />
+                              )}
+                              <span className="hidden sm:inline">
+                                {processingUser === user.id
+                                  ? "Processing..."
+                                  : user.isBanned
+                                  ? "Enable Account"
+                                  : "Disable Account"}
+                              </span>
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List View */}
+            <div className="block md:hidden divide-y divide-slate-100 bg-white">
               <AnimatePresence>
-                {filteredUsers.map((user, index) => (
-                  <motion.tr
+                {filteredUsers.map((user) => (
+                  <motion.div
                     key={user.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="hover:bg-slate-50 transition-colors duration-150"
+                    className="p-4 space-y-3"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="relative cursor-pointer group"
-                          onClick={() => user.profilePic && viewProfilePic(user)}
-                        >
-                          {user.profilePic ? (
-                            <img
-                              src={user.profilePic}
-                              alt={user.name}
-                              className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-100 group-hover:ring-[#008060] transition-all duration-200"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
-                              <span className="text-slate-700 font-bold text-sm">
-                                {user.name?.charAt(0).toUpperCase() || "?"}
-                              </span>
-                            </div>
-                          )}
-                          {user.profilePic && (
-                            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                              <Eye className="w-4 h-4 text-white" />
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-900 leading-snug">{user.name || "Anonymous User"}</p>
-                          <p className="text-xs text-slate-400">ID: {user.id.substring(0, 8)}</p>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-600">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Mail className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{user.email || "N/A"}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Phone className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{user.phone || "N/A"}</span>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge
-                        variant="neutral"
-                        icon={getProviderIcon(user.provider)}
-                        className="bg-slate-100 text-slate-700 border border-slate-200 text-xs px-2 py-0.5 rounded-full capitalize flex items-center gap-1"
+                    {/* Top Profile block */}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="relative cursor-pointer group shrink-0"
+                        onClick={() => user.profilePic && viewProfilePic(user)}
                       >
-                        {user.provider || "email"}
-                      </Badge>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1 text-xs text-slate-700">
-                          <Package className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="font-semibold">{user.orderCount || 0} orders</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-slate-500">
-                          <ShoppingBag className="w-3.5 h-3.5 text-slate-400" />
-                          <span>Spent: {formatCurrency(user.totalSpent || 0)}</span>
-                        </div>
+                        {user.profilePic ? (
+                          <img
+                            src={user.profilePic}
+                            alt={user.name}
+                            className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-100"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                            <span className="text-slate-700 font-bold text-sm">
+                              {user.name?.charAt(0).toUpperCase() || "?"}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
-                      <div className="flex items-center gap-1.5">
-                        <LogIn className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{formatDate(user.lastLogin)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-900 text-sm leading-snug truncate">
+                          {user.name || "Anonymous User"}
+                        </p>
+                        <p className="text-[10px] text-slate-400">ID: {user.id.substring(0, 8)}</p>
                       </div>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                           user.isBanned
                             ? "bg-red-50 text-red-700 border-red-200"
                             : "bg-green-50 text-green-700 border-green-200"
@@ -657,57 +756,81 @@ const Users = () => {
                       >
                         {user.isBanned ? "Disabled" : "Active"}
                       </span>
-                    </td>
+                    </div>
 
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="flex gap-2 justify-end">
+                    {/* Contact & Auth details */}
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50/50 border border-slate-100 rounded-xl p-3">
+                      <div className="space-y-1">
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Contact</p>
+                        <div className="flex items-center gap-1.5 text-slate-600 truncate">
+                          <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{user.email || "N/A"}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-slate-600 truncate">
+                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{user.phone || "N/A"}</span>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Auth & Login</p>
+                        <div className="flex items-center gap-1">
+                          <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[9px] font-bold px-1.5 py-0.2 rounded capitalize">
+                            {user.provider || "email"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-slate-500 truncate">
+                          <LogIn className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{formatDate(user.lastLogin)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats & Actions */}
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex flex-col text-xs text-slate-500 font-medium">
+                        <span>
+                          Orders: <strong className="text-slate-800">{user.orderCount || 0}</strong>
+                        </span>
+                        <span>
+                          Spent: <strong className="text-slate-800">{formatCurrency(user.totalSpent || 0)}</strong>
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => viewUserDetails(user)}
-                          icon={<Eye className="w-4 h-4 text-slate-600" />}
-                          className="border-gray-200 hover:bg-slate-50 py-1"
-                        />
+                          icon={<Eye className="w-3.5 h-3.5 text-slate-600" />}
+                          className="border-gray-200 hover:bg-slate-50 py-1 px-2.5 text-xs"
+                        >
+                          View Details
+                        </Button>
                         <button
                           onClick={() => toggleUserStatus(user.id, user.isBanned)}
                           disabled={processingAction}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all duration-200 ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all duration-200 ${
                             user.isBanned
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                               : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
                           } disabled:opacity-50`}
                         >
                           {processingUser === user.id ? (
-                            <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                           ) : user.isBanned ? (
-                            <CheckCircle className="w-3.5 h-3.5" />
+                            <CheckCircle className="w-3 h-3" />
                           ) : (
-                            <UserX className="w-3.5 h-3.5" />
+                            <UserX className="w-3 h-3" />
                           )}
-                          <span className="hidden sm:inline">
-                            {processingUser === user.id
-                              ? "Processing..."
-                              : user.isBanned
-                              ? "Enable Account"
-                              : "Disable Account"}
-                          </span>
+                          <span>{user.isBanned ? "Enable" : "Disable"}</span>
                         </button>
                       </div>
-                    </td>
-                  </motion.tr>
+                    </div>
+                  </motion.div>
                 ))}
               </AnimatePresence>
-            </tbody>
-          </table>
-
-          {filteredUsers.length === 0 && (
-            <div className="text-center py-16 bg-white border-t">
-              <AlertTriangle className="w-10 h-10 text-slate-300 mx-auto mb-3 animate-pulse" />
-              <p className="text-slate-500 font-semibold text-base">No customers found</p>
-              <p className="text-slate-400 text-xs mt-1">Try updating your filters or searching another keyword.</p>
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
       {/* Pagination Load More Strip */}
