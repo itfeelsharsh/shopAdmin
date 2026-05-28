@@ -601,6 +601,50 @@ function Orders() {
     }
   };
 
+  const handleNukeOrder = async (orderId) => {
+    const confirm1 = window.confirm(
+      `⚠️ WARNING: NUKING ORDER IS IRREVERSIBLE!\n\n` +
+      `This will completely erase this order from the database. Neither the customer nor the admin will ever see it again.\n\n` +
+      `Do you want to proceed?`
+    );
+    if (!confirm1) return;
+
+    const confirm2 = window.confirm(
+      `🚨 DOUBLE CONFIRMATION REQUIRED:\n\n` +
+      `Are you absolutely sure you want to permanently delete order ID: ${orderId}?\n` +
+      `This will also update all overall sales stats and coupon usages accordingly.`
+    );
+    if (!confirm2) return;
+
+    try {
+      setProcessingAction(true);
+      setProcessingOrderState({ id: orderId, status: 'nuke' });
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const result = await AdminOrderService.nukeOrder(orderId);
+
+      if (result.success) {
+        toast.success(`Order successfully nuked and deleted completely.`);
+        
+        setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+        
+        if (isModalOpen && selectedOrder?.id === orderId) {
+          setIsModalOpen(false);
+          setSelectedOrder(null);
+        }
+      } else {
+        throw new Error(result.error || "Failed to delete order");
+      }
+    } catch (err) {
+      console.error("Error nuking order:", err);
+      toast.error(`Nuke failed: ${err.message}`);
+    } finally {
+      setProcessingAction(false);
+      setProcessingOrderState({ id: null, status: null });
+    }
+  };
+
   const handleResendEmail = async (order) => {
     // Confirmation dialog to prevent accidental resends
     const confirmed = window.confirm(
@@ -1524,6 +1568,14 @@ function Orders() {
                             {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? 'Delivering...' : 'Mark Delivered'}
                           </button>
                         )}
+                        <button
+                          onClick={() => handleNukeOrder(order.id)}
+                          className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-semibold transition-colors"
+                          disabled={processingAction}
+                          title="Nuke order (permanently delete)"
+                        >
+                          {processingOrderState.id === order.id && processingOrderState.status === 'nuke' ? 'Nuking...' : 'Nuke'}
+                        </button>
                       </div>
                     </div>
 
@@ -1634,6 +1686,13 @@ function Orders() {
                               {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? '...' : 'Deliver'}
                             </button>
                           )}
+                          <button
+                            onClick={() => handleNukeOrder(order.id)}
+                            className="px-2.5 py-1.5 bg-red-700 text-white rounded-lg text-xs font-semibold hover:bg-red-800"
+                            disabled={processingAction}
+                          >
+                            {processingOrderState.id === order.id && processingOrderState.status === 'nuke' ? '...' : 'Nuke'}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2245,6 +2304,13 @@ function Orders() {
                           {processingOrderState.id === selectedOrder.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? 'Delivering...' : 'Mark as Delivered'}
                         </button>
                       )}
+                      <button
+                        onClick={() => handleNukeOrder(selectedOrder.id)}
+                        className="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-800 transition-colors ml-auto font-semibold"
+                        disabled={processingAction}
+                      >
+                        {processingOrderState.id === selectedOrder.id && processingOrderState.status === 'nuke' ? 'Nuking...' : 'Nuke Order'}
+                      </button>
                     </div>
                   </div>
                 </div>

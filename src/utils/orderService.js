@@ -26,6 +26,7 @@ import {
   getDocs, 
   getDoc, 
   updateDoc, 
+  deleteDoc,
   query, 
   where, 
   orderBy, 
@@ -1207,7 +1208,87 @@ class AdminOrderService {
       console.error('❌ AdminOrderService: Error generating processing queue:', error);
       return {
         success: false,
-        error: error.message || 'Failed to generate processing queue'
+      };
+    }
+  }
+
+  /**
+   * Completely deletes every database entry of an order.
+   * This includes the global order document, the user-specific order document,
+   * and decrementing any coupon code usage if applicable.
+   * 
+   * @param {string} orderId - Global order ID to nuke
+   * @returns {Promise<Object>} - Nuke result
+   */
+  static async nukeOrder(orderId) {
+    console.log(`⚠️ AdminOrderService: Nuking order ${orderId} from the database...`);
+    
+    try {
+      // 1. Get global order data first to retrieve user ID and coupon details
+      const orderRef = doc(db, "orders", orderId);
+      const orderSnapshot = await getDoc(orderRef);
+      
+      if (!orderSnapshot.exists()) {
+        throw new Error(`Order ${orderId} not found in global orders collection.`);
+      }
+      
+      const orderData = orderSnapshot.data();
+      const userId = orderData.userId;
+      const couponCode = orderData.coupon?.code;
+      
+      // 2. Find and delete the user-specific order document
+      if (userId) {
+        try {
+          const userOrdersQuery = query(
+            collection(db, "users", userId, "orders"),
+            where("globalOrderId", "==", orderId)
+          );
+          const userOrdersSnapshot = await getDocs(userOrdersQuery);
+          
+          for (const userOrderDoc of userOrdersSnapshot.docs) {
+            await deleteDoc(userOrderDoc.ref);
+            console.log(`🗑️ AdminOrderService: Deleted user order document ${userOrderDoc.id}`);
+          }
+        } catch (userDeleteError) {
+          console.warn(`⚠️ AdminOrderService: Failed to delete user order:`, userDeleteError);
+        }
+      }
+      
+      // 3. Decrement coupon usage count if coupon was used
+      if (couponCode) {
+        try {
+          const couponsQuery = query(
+            collection(db, "coupons"),
+            where("code", "==", couponCode.toUpperCase().trim())
+          );
+          const couponsSnapshot = await getDocs(couponsQuery);
+          
+          for (const couponDoc of couponsSnapshot.docs) {
+            const currentUses = couponDoc.data().usedCount || 0;
+            const newUses = Math.max(0, currentUses - 1);
+            await updateDoc(couponDoc.ref, {
+              usedCount: newUses
+            });
+            console.log(`🎟️ AdminOrderService: Decremented usage for coupon ${couponCode} (${currentUses} → ${newUses})`);
+          }
+        } catch (couponError) {
+          console.warn(`⚠️ AdminOrderService: Failed to update coupon count:`, couponError);
+        }
+      }
+      
+      // 4. Finally, delete the global order document
+      await deleteDoc(orderRef);
+      console.log(`🗑️ AdminOrderService: Deleted global order document ${orderId}`);
+      
+      return {
+        success: true,
+        message: `Order ${orderId} completely nuked from the database.`
+      };
+    } catch (error) {
+      console.error('❌ AdminOrderService: Error nuking order:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to nuke order'
       };
     }
   }
