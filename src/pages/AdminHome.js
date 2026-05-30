@@ -9,7 +9,7 @@ import { getOrderTotal } from "../utils/orderService";
 import {
   Home, Package, Users, ShoppingBag, Tag, Image as ImageIcon,
   Bell, LogOut, TrendingUp, DollarSign, ShoppingCart, Menu, X,
-  ChevronRight, Activity, Smartphone
+  ChevronRight, Activity, Smartphone, CreditCard
 } from "react-feather";
 import { LoadingSpinner } from "../components/ui";
 import {
@@ -529,7 +529,8 @@ const AdminHome = () => {
     { path: "/coupons", icon: Tag, label: "Discount Codes" },
     { path: "/banners", icon: ImageIcon, label: "Store Banners" },
     { path: "/announcements", icon: Bell, label: "Announcements" },
-    { path: "/notifications", icon: Smartphone, label: "Push Campaigns" }
+    { path: "/notifications", icon: Smartphone, label: "Push Campaigns" },
+    { path: "/payments", icon: CreditCard, label: "Payment Gateway" }
   ];
 
   const isManageRoute = location.pathname !== '/';

@@ -11,6 +11,7 @@ import Orders from "./pages/Orders";
 import Login from "./pages/Login";
 import AdminHome from "./pages/AdminHome";
 import Notifications from "./pages/Notifications";
+import PaymentGatewayData from "./pages/PaymentGatewayData";
 import { ToastContainer } from "react-toastify"; 
 import 'react-toastify/dist/ReactToastify.css'; 
 import { AuthProvider } from "./contexts/AuthContext"; 
@@ -48,6 +49,7 @@ function App() {
             <Route path="banners" element={<BannerManager />} />
             <Route path="announcements" element={<AnnouncementManager />} />
             <Route path="notifications" element={<Notifications />} />
+            <Route path="payments" element={<PaymentGatewayData />} />
           </Route>
           {/* Optionally, handle 404 Not Found */}
           <Route path="*" element={<div className="p-4">404 Not Found</div>} />
