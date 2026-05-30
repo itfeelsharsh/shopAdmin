@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -10,6 +10,7 @@ import {
 import { Button, Card, Input, Alert, Badge, LoadingSpinner } from "../../components/ui";
 import { toast } from "react-toastify";
 import { sendBroadcastNotification } from "../../utils/notificationService";
+import { compressImage, uploadToCDN } from "../../utils/uploadHelper";
 
 const productTypes = [
   'Notebooks and Journals', 'Pens and Pencils', 'Paper and Notepads',
@@ -33,6 +34,137 @@ const EditProduct = () => {
   const [activeTab, setActiveTab] = useState('basic');
   const [loading, setLoading] = useState(true);
   const [product, setProduct] = useState(null);
+
+  // Custom brand states
+  const [dynamicBrands, setDynamicBrands] = useState([]);
+  const [isCreatingBrand, setIsCreatingBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [isCreatingBrandSubmitting, setIsCreatingBrandSubmitting] = useState(false);
+  
+  // Custom upload states
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState([]);
+
+  useEffect(() => {
+    // Fetch dynamic brands from settings doc
+    const fetchDynamicBrands = async () => {
+      try {
+        const docRef = doc(db, "settings", "brands");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().brands) {
+          setDynamicBrands(docSnap.data().brands);
+        }
+      } catch (err) {
+        console.error("Error fetching dynamic brands:", err);
+      }
+    };
+    fetchDynamicBrands();
+  }, []);
+
+  const handleCreateBrand = async () => {
+    const trimmed = newBrandName.trim();
+    if (!trimmed) {
+      toast.error("Please enter a brand name");
+      return;
+    }
+    
+    const allBrands = [...new Set([...brands, ...dynamicBrands])].sort();
+    if (allBrands.includes(trimmed)) {
+      toast.error("Brand already exists");
+      return;
+    }
+    
+    setIsCreatingBrandSubmitting(true);
+    try {
+      const docRef = doc(db, "settings", "brands");
+      const docSnap = await getDoc(docRef);
+      let list = [];
+      if (docSnap.exists()) {
+        list = docSnap.data().brands || [];
+      }
+      
+      if (!list.includes(trimmed)) {
+        list.push(trimmed);
+        await setDoc(docRef, { brands: list }, { merge: true });
+      }
+      
+      setDynamicBrands([...dynamicBrands, trimmed]);
+      setProduct(prev => ({ ...prev, brand: trimmed }));
+      setNewBrandName("");
+      setIsCreatingBrand(false);
+      toast.success(`Brand "${trimmed}" created and selected!`);
+    } catch (error) {
+      console.error("Error creating brand:", error);
+      toast.error("Failed to create brand");
+    } finally {
+      setIsCreatingBrandSubmitting(false);
+    }
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFiles(Array.from(e.dataTransfer.files));
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      processFiles(Array.from(e.target.files));
+    }
+  };
+
+  const processFiles = async (files) => {
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) {
+        toast.error(`${file.name} is not an image file.`);
+        continue;
+      }
+      
+      const fileId = Math.random().toString(36).substring(2, 9) + "-" + Date.now();
+      const newQueueItem = { id: fileId, name: file.name, progress: 0, status: "compressing" };
+      setUploadQueue(prev => [...prev, newQueueItem]);
+      
+      try {
+        // 1. Client-side compression
+        const compressed = await compressImage(file);
+        setUploadQueue(prev => prev.map(item => item.id === fileId ? { ...item, status: "uploading" } : item));
+        
+        // 2. Upload to CDN
+        const cdnUrl = await uploadToCDN(compressed, (percent) => {
+          setUploadQueue(prev => prev.map(item => item.id === fileId ? { ...item, progress: percent } : item));
+        });
+        
+        // 3. Auto-populate product image fields
+        setProduct(prev => {
+          if (!prev.image) return { ...prev, image: cdnUrl };
+          if (!prev.image2) return { ...prev, image2: cdnUrl };
+          if (!prev.image3) return { ...prev, image3: cdnUrl };
+          return { ...prev, image: cdnUrl }; // fallback to primary if all filled
+        });
+        
+        setUploadQueue(prev => prev.filter(item => item.id !== fileId));
+        toast.success(`Uploaded ${file.name} successfully!`);
+      } catch (err) {
+        console.error("Error uploading file:", err);
+        setUploadQueue(prev => prev.map(item => item.id === fileId ? { ...item, status: "error", errorMsg: err.message } : item));
+        toast.error(`Failed to upload ${file.name}: ${err.message}`);
+      }
+    }
+  };
+
   const [tagInput, setTagInput] = useState("");
   const [featureInput, setFeatureInput] = useState("");
   const [specKey, setSpecKey] = useState("");
@@ -275,18 +407,55 @@ const EditProduct = () => {
                 required
               />
 
-              <div>
+               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Brand</label>
-                <select
-                  value={product.brand}
-                  onChange={(e) => setProduct({ ...product, brand: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Brand</option>
-                  {brands.map((brand) => (
-                    <option key={brand} value={brand}>{brand}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={product.brand}
+                    onChange={(e) => setProduct({ ...product, brand: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Brand</option>
+                    {[...new Set([...brands, ...dynamicBrands])].sort().map((brand) => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  </select>
+                </div>
+                {isCreatingBrand ? (
+                  <div className="mt-2 flex gap-2 items-center">
+                    <Input
+                      type="text"
+                      placeholder="New brand name"
+                      value={newBrandName}
+                      onChange={(e) => setNewBrandName(e.target.value)}
+                      className="mb-0 flex-grow"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleCreateBrand}
+                      isLoading={isCreatingBrandSubmitting}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-10 px-3 shrink-0"
+                    >
+                      Create
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => setIsCreatingBrand(false)}
+                      variant="ghost"
+                      className="text-gray-500 text-xs h-10 px-3 shrink-0"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingBrand(true)}
+                    className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 focus:outline-none"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Create New Brand
+                  </button>
+                )}
               </div>
 
               <div>
@@ -422,6 +591,63 @@ const EditProduct = () => {
           className="space-y-6"
         >
           <Card title="Product Images" icon={<ImageIcon className="w-5 h-5 text-pink-600" />}>
+            {/* Drag & Drop Zone */}
+            <div
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              onClick={() => document.getElementById("file-upload").click()}
+              className={`mb-6 border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 ${
+                dragActive
+                  ? "border-blue-500 bg-blue-50/50 scale-[1.01]"
+                  : "border-gray-300 hover:border-blue-400 hover:bg-gray-50/50"
+              }`}
+            >
+              <input
+                id="file-upload"
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              <div className="flex flex-col items-center justify-center space-y-2">
+                <div className="p-3 bg-blue-50 rounded-full text-blue-500">
+                  <ImageIcon className="w-8 h-8 animate-bounce" />
+                </div>
+                <p className="font-semibold text-gray-700">Drag and drop images here, or click to browse</p>
+                <p className="text-xs text-gray-400 font-medium">Images will be compressed client-side (WhatsApp-like compression) and uploaded automatically to the CDN</p>
+              </div>
+            </div>
+
+            {/* Upload Queue Progress */}
+            {uploadQueue.length > 0 && (
+              <div className="mb-6 space-y-2">
+                {uploadQueue.map(item => (
+                  <div key={item.id} className="bg-gray-50 border border-gray-150 rounded-lg p-3 flex flex-col space-y-1.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold text-gray-700 truncate max-w-[70%]">{item.name}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                        item.status === 'compressing' ? 'bg-amber-100 text-amber-700' :
+                        item.status === 'uploading' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {item.status} {item.status === 'uploading' ? `${item.progress}%` : ''}
+                      </span>
+                    </div>
+                    {item.status === 'uploading' && (
+                      <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                        <div className="bg-blue-500 h-full transition-all duration-300" style={{ width: `${item.progress}%` }}></div>
+                      </div>
+                    )}
+                    {item.status === 'error' && (
+                      <p className="text-[10px] text-red-500 mt-1">{item.errorMsg}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {['image', 'image2', 'image3'].map((imgKey, index) => (
                 <div key={imgKey}>

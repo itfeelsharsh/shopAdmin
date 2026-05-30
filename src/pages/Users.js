@@ -185,8 +185,17 @@ const Users = () => {
             }
           }
           
+          let profilePic = userData.profilePic;
+          const cdnDomain = process.env.REACT_APP_CDN_DOMAIN || 'cdn.kamikoto.click';
+          if (profilePic === "https://admin.kamikoto.click/static/media/defaultpfp.d4a4059e1339afff7575.png" || 
+              profilePic === "/static/media/defaultpfp.d4a4059e1339afff7575.png" ||
+              profilePic === `https://${cdnDomain}/static/media/defaultpfp.d4a4059e1339afff7575.png`) {
+            profilePic = `https://${cdnDomain}/uploads/2026-05/7iab5ffy-3423.jpeg`;
+          }
+
           return {
             ...userData,
+            profilePic,
             orders: sortedOrders,
             totalSpent,
             orderCount,
