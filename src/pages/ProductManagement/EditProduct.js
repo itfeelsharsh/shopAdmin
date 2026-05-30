@@ -673,7 +673,8 @@ const EditProduct = () => {
                         alt={`Preview ${index + 1}`}
                         className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 group-hover:border-blue-500 transition-all duration-200"
                         onError={(e) => {
-                          e.target.src = 'https://via.placeholder.com/300x200?text=Invalid+Image';
+                          e.target.onerror = null;
+                          e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="14" fill="%23aaa">Invalid Image</text></svg>';
                         }}
                       />
                       <button

@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { doc, setDoc, getDoc } from "firebase/firestore";
-import { db } from "../../firebase";
+import { db, getAppCheckToken } from "../../firebase";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Package, DollarSign, Image as ImageIcon, Tag, Info, Check,
-  X, Plus, Trash2, Globe, Shield
+  X, Plus, Trash2, Globe, Shield, Cpu
 } from "react-feather";
 import { Button, Card, Input, Alert, Badge } from "../../components/ui";
 import { toast } from "react-toastify";
@@ -28,6 +28,15 @@ const brands = [
   'Camel', 'Faber-Castell', 'Staedtler', 'Doms', 'Camlin', 'Luxor',
   'Monami', 'Schneider', 'Pentel', 'Pilot', 'Kokuyo', 'Nataraj',
   'OHPen', 'Bic', 'Zebra', 'Stabilo',
+];
+
+const loadingPhases = [
+  "Analyzing product details... 🔎",
+  "Drafting description & key features... ✍️",
+  "Generating specifications & tags... 🏷️",
+  "Mapping category & warranty details... 🛡️",
+  "Suggesting retail & selling prices... 💰",
+  "Populating your listing form... ✨"
 ];
 
 /**
@@ -61,6 +70,9 @@ const AddProduct = () => {
   });
 
   const [tagInput, setTagInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState("");
+
   
   // Custom brand states
   const [dynamicBrands, setDynamicBrands] = useState([]);
@@ -68,24 +80,36 @@ const AddProduct = () => {
   const [newBrandName, setNewBrandName] = useState("");
   const [isCreatingBrandSubmitting, setIsCreatingBrandSubmitting] = useState(false);
   
+  // Custom category states
+  const [dynamicCategories, setDynamicCategories] = useState([]);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [isCreatingCategorySubmitting, setIsCreatingCategorySubmitting] = useState(false);
+  
   // Custom upload states
   const [dragActive, setDragActive] = useState(false);
   const [uploadQueue, setUploadQueue] = useState([]);
 
   useEffect(() => {
-    // Fetch dynamic brands from settings doc
-    const fetchDynamicBrands = async () => {
+    // Fetch dynamic brands and categories from settings docs
+    const fetchSettings = async () => {
       try {
-        const docRef = doc(db, "settings", "brands");
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data().brands) {
-          setDynamicBrands(docSnap.data().brands);
+        const brandsRef = doc(db, "settings", "brands");
+        const brandsSnap = await getDoc(brandsRef);
+        if (brandsSnap.exists() && brandsSnap.data().brands) {
+          setDynamicBrands(brandsSnap.data().brands);
+        }
+
+        const categoriesRef = doc(db, "settings", "categories");
+        const categoriesSnap = await getDoc(categoriesRef);
+        if (categoriesSnap.exists() && categoriesSnap.data().categories) {
+          setDynamicCategories(categoriesSnap.data().categories);
         }
       } catch (err) {
-        console.error("Error fetching dynamic brands:", err);
+        console.error("Error fetching dynamic settings:", err);
       }
     };
-    fetchDynamicBrands();
+    fetchSettings();
   }, []);
 
   const handleCreateBrand = async () => {
@@ -125,6 +149,46 @@ const AddProduct = () => {
       toast.error("Failed to create brand");
     } finally {
       setIsCreatingBrandSubmitting(false);
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      toast.error("Please enter a category name");
+      return;
+    }
+    
+    const allCategories = [...new Set([...productTypes, ...dynamicCategories])].sort();
+    if (allCategories.includes(trimmed)) {
+      toast.error("Category already exists");
+      return;
+    }
+    
+    setIsCreatingCategorySubmitting(true);
+    try {
+      const docRef = doc(db, "settings", "categories");
+      const docSnap = await getDoc(docRef);
+      let list = [];
+      if (docSnap.exists()) {
+        list = docSnap.data().categories || [];
+      }
+      
+      if (!list.includes(trimmed)) {
+        list.push(trimmed);
+        await setDoc(docRef, { categories: list }, { merge: true });
+      }
+      
+      setDynamicCategories([...dynamicCategories, trimmed]);
+      setNewProduct(prev => ({ ...prev, type: trimmed }));
+      setNewCategoryName("");
+      setIsCreatingCategory(false);
+      toast.success(`Category "${trimmed}" created and selected!`);
+    } catch (error) {
+      console.error("Error creating category:", error);
+      toast.error("Failed to create category");
+    } finally {
+      setIsCreatingCategorySubmitting(false);
     }
   };
 
@@ -198,6 +262,128 @@ const AddProduct = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [slugAvailability, setSlugAvailability] = useState({ checked: false, available: false });
   const [errors, setErrors] = useState({});
+
+  const handleGenerateAI = async () => {
+    if (!newProduct.name.trim()) {
+      toast.error("Please enter a Product Name first to generate details!");
+      return;
+    }
+
+    setAiLoading(true);
+    let phaseIndex = 0;
+    setCurrentPhase(loadingPhases[0]);
+    const phaseInterval = setInterval(() => {
+      phaseIndex = (phaseIndex + 1) % loadingPhases.length;
+      setCurrentPhase(loadingPhases[phaseIndex]);
+    }, 1500);
+
+    try {
+      const appCheckToken = await getAppCheckToken();
+      const headers = { "Content-Type": "application/json" };
+      if (appCheckToken) {
+        headers["X-Firebase-AppCheck"] = appCheckToken;
+      }
+
+      const apiBase = window.location.hostname === 'localhost' ? 'http://localhost:8788' : '';
+      const response = await fetch(`${apiBase}/api/generate-product`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: newProduct.name,
+          imageUrl: newProduct.image // use primary image if uploaded
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to generate product details");
+      }
+
+      const data = await response.json();
+      if (data.success && data.product) {
+        const p = data.product;
+        
+        const generatedBrand = p.brand || "";
+        const generatedCategory = p.category || "";
+
+        const allBrandsList = [...new Set([...brands, ...dynamicBrands])];
+        const allCategoriesList = [...new Set([...productTypes, ...dynamicCategories])];
+
+        // Match Brand
+        let matchedBrand = "";
+        if (generatedBrand) {
+          const match = allBrandsList.find(b => b.toLowerCase().trim() === generatedBrand.toLowerCase().trim());
+          if (match) {
+            matchedBrand = match;
+          } else {
+            toast.warn(`AI suggested brand "${generatedBrand}", which doesn't exist in the system. Use "Create New Brand" to add it.`, { autoClose: 10000 });
+          }
+        }
+
+        // Match Category
+        let matchedCategory = "";
+        if (generatedCategory) {
+          const match = allCategoriesList.find(c => c.toLowerCase().trim() === generatedCategory.toLowerCase().trim());
+          if (match) {
+            matchedCategory = match;
+          } else {
+            toast.warn(`AI suggested category "${generatedCategory}", which doesn't exist in the system. Use "Create New Category" to add it.`, { autoClose: 10000 });
+          }
+        }
+
+        // Update states
+        setNewProduct(prev => ({
+          ...prev,
+          name: p.name || prev.name,
+          description: p.description || prev.description,
+          brand: matchedBrand || prev.brand,
+          type: matchedCategory || prev.type,
+          stock: p.stock ? String(p.stock) : String(Math.floor(Math.random() * 999) + 1),
+          origin: p.origin || prev.origin,
+          additionalInfo: p.additionalInfo || prev.additionalInfo,
+          showOnHome: p.showOnHome !== undefined ? !!p.showOnHome : true,
+          mrp: p.mrp ? String(p.mrp) : prev.mrp,
+          sellingPrice: p.sellingPrice ? String(p.sellingPrice) : prev.sellingPrice,
+          price: p.sellingPrice ? String(p.sellingPrice) : prev.price,
+          tags: Array.isArray(p.tags) ? p.tags : prev.tags,
+          features: Array.isArray(p.features) ? p.features : prev.features,
+          specifications: Array.isArray(p.specifications) ? p.specifications : prev.specifications,
+          warranty: p.warranty ? {
+            available: !!p.warranty.available,
+            period: p.warranty.period || "",
+            details: p.warranty.details || ""
+          } : prev.warranty,
+          guarantee: p.guarantee ? {
+            available: !!p.guarantee.available,
+            period: p.guarantee.period || "",
+            details: p.guarantee.details || ""
+          } : prev.guarantee,
+          importDetails: p.importDetails ? {
+            isImported: !!p.importDetails.isImported,
+            country: p.importDetails.country || p.origin || "",
+            deliveryNote: p.importDetails.deliveryNote || ""
+          } : {
+            isImported: !!(p.origin && p.origin.toLowerCase() !== 'india'),
+            country: p.origin || "",
+            deliveryNote: ""
+          },
+          slug: p.name ? p.name.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w-]/g, '') : prev.slug
+        }));
+
+        setSlugAvailability({ checked: false, available: false });
+        toast.success("AI generated all product listing fields successfully! Please verify across tabs.");
+      } else {
+        throw new Error("Invalid response format from generator");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(`AI Generation Failed: ${err.message}`);
+    } finally {
+      clearInterval(phaseInterval);
+      setAiLoading(false);
+      setCurrentPhase("");
+    }
+  };
 
   const tabs = [
     { id: 'basic', label: 'Basic Info', icon: Package },
@@ -436,6 +622,76 @@ const AddProduct = () => {
           animate={{ opacity: 1, x: 0 }}
           className="space-y-6"
         >
+          {/* AI Generator Box */}
+          <div className="relative overflow-hidden bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 rounded-2xl p-6 text-white shadow-xl">
+            <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+            <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+            <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-1 max-w-2xl">
+                <div className="flex items-center gap-2">
+                  <span className="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                    <Cpu className="w-3 h-3 animate-spin" style={{ animationDuration: '3s' }} /> AI Listing Assistant
+                  </span>
+                  <span className="text-xs text-indigo-100">Powered by Gemini 3.5 Flash</span>
+                </div>
+                <h3 className="text-xl font-bold">Generate Product Listing with AI</h3>
+                <p className="text-sm text-indigo-100">
+                  Enter the product name/title below and click generate. AI will automatically construct a high-quality description, category, tags, key features, pricing, specifications, and warranty information. (Optional: upload a primary image first to guide the AI).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleGenerateAI}
+                disabled={aiLoading}
+                className="w-full md:w-auto shrink-0 bg-white text-indigo-700 hover:bg-indigo-50 font-bold px-6 py-3 rounded-xl shadow-md transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {aiLoading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-indigo-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Auto-Generate Listing ✨</span>
+                  </>
+                )}
+              </button>
+            </div>
+            
+            {/* Multi-stage interactive loading loader */}
+            <AnimatePresence>
+              {aiLoading && currentPhase && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-4 pt-4 border-t border-white/20 flex flex-col items-center justify-center"
+                >
+                  <p className="text-sm font-semibold tracking-wide animate-pulse">
+                    {currentPhase}
+                  </p>
+                  <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden mt-2 max-w-md">
+                    <motion.div
+                      className="bg-white h-full"
+                      animate={{
+                        x: ["-100%", "100%"]
+                      }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 1.5,
+                        ease: "easeInOut"
+                      }}
+                      style={{ width: "40%" }}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           <Card title="Basic Information" icon={<Package className="w-5 h-5 text-blue-600" />}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Input
@@ -504,16 +760,53 @@ const AddProduct = () => {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Category
                 </label>
-                <select
-                  value={newProduct.type}
-                  onChange={(e) => setNewProduct({ ...newProduct, type: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Category</option>
-                  {productTypes.map((type) => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={newProduct.type}
+                    onChange={(e) => setNewProduct({ ...newProduct, type: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Category</option>
+                    {[...new Set([...productTypes, ...dynamicCategories])].sort().map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+                {isCreatingCategory ? (
+                  <div className="mt-2 flex gap-2 items-center">
+                    <Input
+                      type="text"
+                      placeholder="New category name"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      className="mb-0 flex-grow"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleCreateCategory}
+                      isLoading={isCreatingCategorySubmitting}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-10 px-3 shrink-0"
+                    >
+                      Create
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => setIsCreatingCategory(false)}
+                      variant="ghost"
+                      className="text-gray-500 text-xs h-10 px-3 shrink-0"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingCategory(true)}
+                    className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 focus:outline-none"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Create New Category
+                  </button>
+                )}
               </div>
 
               <Input
@@ -752,7 +1045,8 @@ const AddProduct = () => {
                         alt={`Preview ${index + 1}`}
                         className="w-full h-48 object-cover rounded-lg border-2 border-gray-200 group-hover:border-blue-500 transition-all duration-200"
                         onError={(e) => {
-                          e.target.src = 'https://via.placeholder.com/300x200?text=Invalid+Image';
+                          e.target.onerror = null;
+                          e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="14" fill="%23aaa">Invalid Image</text></svg>';
                         }}
                       />
                       <button

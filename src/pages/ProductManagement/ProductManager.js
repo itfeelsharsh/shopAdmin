@@ -788,11 +788,12 @@ const ProductManager = () => {
                 {/* Product Image */}
                 <div className="relative h-48 overflow-hidden rounded-t-xl">
                   <img
-                    src={product.image || 'https://via.placeholder.com/300x200?text=No+Image'}
+                    src={product.image || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="14" fill="%23aaa">No Image</text></svg>'}
                     alt={product.name}
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      e.target.src = 'https://via.placeholder.com/300x200?text=No+Image';
+                      e.target.onerror = null;
+                      e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="14" fill="%23aaa">No Image</text></svg>';
                     }}
                   />
 
@@ -931,11 +932,12 @@ const ProductManager = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <img
-                          src={product.image || 'https://via.placeholder.com/50'}
+                          src={product.image || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="10" fill="%23aaa">No</text></svg>'}
                           alt={product.name}
                           className="w-12 h-12 rounded object-cover"
                           onError={(e) => {
-                            e.target.src = 'https://via.placeholder.com/50';
+                            e.target.onerror = null;
+                            e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="10" fill="%23aaa">No</text></svg>';
                           }}
                         />
                         <div>
@@ -1101,7 +1103,8 @@ const ProductManager = () => {
                     alt={`Product ${idx + 1}`}
                     className="w-full h-32 object-cover rounded-lg"
                     onError={(e) => {
-                      e.target.src = 'https://via.placeholder.com/200';
+                      e.target.onerror = null;
+                      e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="100%" height="100%" fill="%23eee"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="14" fill="%23aaa">No Image</text></svg>';
                     }}
                   />
                 ))}
