@@ -75,9 +75,8 @@ export const uploadToCDN = async (file, onProgress) => {
   const filename = file.name || 'image.jpg';
   const contentType = file.type || 'image/jpeg';
   
-  const cdnDomain = process.env.REACT_APP_CDN_DOMAIN || 'cdn.kamikoto.click';
-  // 1. Get presigned R2 upload URL from CDN API
-  const response = await fetch(`https://${cdnDomain}/api/upload`, {
+  // 1. Get presigned R2 upload URL from the admin portal's own API
+  const response = await fetch(`/api/upload`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -90,7 +89,7 @@ export const uploadToCDN = async (file, onProgress) => {
   
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error || 'Failed to get upload URL from CDN');
+    throw new Error(errData.error || 'Failed to get upload URL from local API');
   }
   
   const { uploadUrl, cdnUrl } = await response.json();
