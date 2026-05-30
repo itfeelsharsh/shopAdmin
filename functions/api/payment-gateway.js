@@ -125,7 +125,7 @@ function getCORSHeaders(request) {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Firebase-AppCheck",
     "Access-Control-Max-Age": "86400",
     "Content-Type": "application/json",
   };
