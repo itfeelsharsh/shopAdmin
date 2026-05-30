@@ -20,10 +20,7 @@ import { formatCurrency } from "../utils/formatUtils";
 import { LoadingSpinner } from "../components/ui";
 
 const getApiBaseUrl = () => {
-  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    return "http://localhost:3000/api";
-  }
-  return "https://kamikoto.click/api";
+  return `${window.location.origin}/api`;
 };
 
 const PaymentGatewayData = () => {
