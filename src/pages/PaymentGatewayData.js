@@ -59,7 +59,7 @@ const PaymentGatewayData = () => {
     try {
       const baseUrl = getApiBaseUrl();
       // Fetch a larger sample of payments to calculate aggregate stats
-      const response = await fetch(`${baseUrl}/razorpay/data?type=payments&count=50`);
+      const response = await fetch(`${baseUrl}/payment-gateway?type=payments&count=50`);
       if (response.ok) {
         const paymentsData = await response.json();
         const payments = paymentsData.items || [];
@@ -80,7 +80,7 @@ const PaymentGatewayData = () => {
 
         // Fetch disputes count
         let disputesCount = 0;
-        const dispResponse = await fetch(`${baseUrl}/razorpay/data?type=disputes&count=10`);
+        const dispResponse = await fetch(`${baseUrl}/payment-gateway?type=disputes&count=10`);
         if (dispResponse.ok) {
           const disputesData = await dispResponse.json();
           disputesCount = (disputesData.items || []).filter(d => d.status === "under_review" || d.status === "lost_to_merch").length;
@@ -105,7 +105,7 @@ const PaymentGatewayData = () => {
     try {
       const baseUrl = getApiBaseUrl();
       const response = await fetch(
-        `${baseUrl}/razorpay/data?type=${activeTab}&count=${count}&skip=${skip}`
+        `${baseUrl}/payment-gateway?type=${activeTab}&count=${count}&skip=${skip}`
       );
       
       if (!response.ok) {
