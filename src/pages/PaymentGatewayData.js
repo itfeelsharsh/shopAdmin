@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { getAppCheckToken } from "../firebase";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CreditCard,
@@ -55,8 +56,15 @@ const PaymentGatewayData = () => {
   const fetchStats = useCallback(async () => {
     try {
       const baseUrl = getApiBaseUrl();
+      const appCheckToken = await getAppCheckToken();
+      const headers = {};
+      if (appCheckToken) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+      }
       // Fetch a larger sample of payments to calculate aggregate stats
-      const response = await fetch(`${baseUrl}/payment-gateway?type=payments&count=50`);
+      const response = await fetch(`${baseUrl}/payment-gateway?type=payments&count=50`, {
+        headers
+      });
       if (response.ok) {
         const paymentsData = await response.json();
         const payments = paymentsData.items || [];
@@ -77,7 +85,9 @@ const PaymentGatewayData = () => {
 
         // Fetch disputes count
         let disputesCount = 0;
-        const dispResponse = await fetch(`${baseUrl}/payment-gateway?type=disputes&count=10`);
+        const dispResponse = await fetch(`${baseUrl}/payment-gateway?type=disputes&count=10`, {
+          headers
+        });
         if (dispResponse.ok) {
           const disputesData = await dispResponse.json();
           disputesCount = (disputesData.items || []).filter(d => d.status === "under_review" || d.status === "lost_to_merch").length;
@@ -101,8 +111,14 @@ const PaymentGatewayData = () => {
     setError(null);
     try {
       const baseUrl = getApiBaseUrl();
+      const appCheckToken = await getAppCheckToken();
+      const headers = {};
+      if (appCheckToken) {
+        headers['X-Firebase-AppCheck'] = appCheckToken;
+      }
       const response = await fetch(
-        `${baseUrl}/payment-gateway?type=${activeTab}&count=${count}&skip=${skip}`
+        `${baseUrl}/payment-gateway?type=${activeTab}&count=${count}&skip=${skip}`,
+        { headers }
       );
       
       if (!response.ok) {

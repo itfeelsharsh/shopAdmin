@@ -1,4 +1,5 @@
 import featureConfig from './featureConfig';
+import { getAppCheckToken } from '../firebase';
 
 /**
  * Email Deduplication Guard (Admin Panel)
@@ -550,9 +551,14 @@ export const sendEmail = async (emailData) => {
     };
     
     const apiEndpoint = `${getApiFunctionBaseUrl()}/send-email`;
+    const appCheckToken = await getAppCheckToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (appCheckToken) {
+      headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
     const response = await fetch(apiEndpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(emailPayload),
     });
     

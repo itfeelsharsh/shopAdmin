@@ -1,5 +1,5 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, getAppCheckToken } from '../firebase';
 
 /**
  * Notification Service for Shop Admin
@@ -57,11 +57,14 @@ export const sendBroadcastNotification = async (notificationData) => {
 
     // 2. Call the backend API to send the messages
     const apiEndpoint = `${getApiFunctionBaseUrl()}/send-notification`;
+    const appCheckToken = await getAppCheckToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (appCheckToken) {
+      headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
     const response = await fetch(apiEndpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         tokens: uniqueTokens,
         notification: {
@@ -111,11 +114,14 @@ export const sendUserNotification = async (userId, notificationData) => {
 
     // 2. Call the backend API
     const apiEndpoint = `${getApiFunctionBaseUrl()}/send-notification`;
+    const appCheckToken = await getAppCheckToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (appCheckToken) {
+      headers['X-Firebase-AppCheck'] = appCheckToken;
+    }
     const response = await fetch(apiEndpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         tokens: userData.fcmTokens,
         notification: {

@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore"; 
 import { getMessaging } from "firebase/messaging";
+import { initializeAppCheck, ReCaptchaV3Provider, getToken } from "firebase/app-check";
 
 // Firebase configuration using environment variables only
 const firebaseConfig = {
@@ -24,7 +25,7 @@ console.log('Firebase Configuration Status:', {
 });
 
 // Initialize Firebase app with error handling
-let app, auth, db, messaging;
+let app, auth, db, messaging, appCheckInstance;
 
 try {
   // Check if all required config values are present
@@ -51,6 +52,24 @@ try {
 
   messaging = getMessaging(app);
   console.log('Firebase messaging initialized successfully');
+
+  // Initialize App Check
+  if (typeof window !== "undefined") {
+    // Enable App Check debug token in local development environments
+    if (
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      process.env.NODE_ENV === "development"
+    ) {
+      window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+
+    appCheckInstance = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider("6LdQtjcrAAAAAB-gw9QaVLt8zIUTcvWAjCmlVwDs"),
+      isTokenAutoRefreshEnabled: true,
+    });
+    console.log('Firebase App Check initialized successfully');
+  }
 
   // Set auth persistence with error handling
   setPersistence(auth, browserLocalPersistence)
@@ -85,5 +104,16 @@ try {
     getToken: () => Promise.reject(new Error('Firebase not initialized'))
   };
 }
+
+export const getAppCheckToken = async () => {
+  if (!appCheckInstance) return null;
+  try {
+    const tokenResult = await getToken(appCheckInstance, false);
+    return tokenResult.token;
+  } catch (error) {
+    console.warn("Failed to retrieve App Check token:", error);
+    return null;
+  }
+};
 
 export { auth, db, messaging }; 

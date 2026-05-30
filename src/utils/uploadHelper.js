@@ -1,3 +1,5 @@
+import { getAppCheckToken } from "../firebase";
+
 /**
  * Compresses an image file client-side using HTML5 Canvas.
  * Resizes the image to fit within maxWidth/maxHeight and compresses it using JPEG quality.
@@ -76,11 +78,14 @@ export const uploadToCDN = async (file, onProgress) => {
   const contentType = file.type || 'image/jpeg';
   
   // 1. Get presigned R2 upload URL from the admin portal's own API
+  const appCheckToken = await getAppCheckToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (appCheckToken) {
+    headers['X-Firebase-AppCheck'] = appCheckToken;
+  }
   const response = await fetch(`/api/upload`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       filename,
       contentType,
