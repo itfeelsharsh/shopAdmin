@@ -9,7 +9,7 @@ import { getOrderTotal } from "../utils/orderService";
 import {
   Home, Package, Users, ShoppingBag, Tag, Image as ImageIcon,
   Bell, LogOut, TrendingUp, DollarSign, ShoppingCart, Menu, X,
-  ChevronRight, Activity, Smartphone, CreditCard
+  ChevronRight, Activity, Smartphone, CreditCard, Plus
 } from "react-feather";
 import { LoadingSpinner } from "../components/ui";
 import {
@@ -525,6 +525,7 @@ const AdminHome = () => {
     { path: "/", icon: Home, label: "Overview" },
     { path: "/orders", icon: ShoppingBag, label: "Orders" },
     { path: "/products", icon: Package, label: "Products" },
+    { path: "/products/add", icon: Plus, label: "Add Product" },
     { path: "/users", icon: Users, label: "Customers" },
     { path: "/coupons", icon: Tag, label: "Discount Codes" },
     { path: "/banners", icon: ImageIcon, label: "Store Banners" },
@@ -564,8 +565,11 @@ const AdminHome = () => {
             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
               {menuItems.map((item, index) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path ||
-                  (item.path !== '/' && location.pathname.startsWith(item.path));
+                const isActive = item.path === '/'
+                  ? location.pathname === '/'
+                  : (item.path === '/products'
+                      ? location.pathname === '/products' || location.pathname.startsWith('/products/edit')
+                      : location.pathname.startsWith(item.path));
 
                 return (
                   <Link
@@ -639,8 +643,11 @@ const AdminHome = () => {
               <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
                 {menuItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive = location.pathname === item.path ||
-                    (item.path !== '/' && location.pathname.startsWith(item.path));
+                  const isActive = item.path === '/'
+                    ? location.pathname === '/'
+                    : (item.path === '/products'
+                        ? location.pathname === '/products' || location.pathname.startsWith('/products/edit')
+                        : location.pathname.startsWith(item.path));
 
                   return (
                     <Link

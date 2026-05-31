@@ -29,7 +29,7 @@ export async function onRequest(context) {
 
   try {
     const body = await request.json();
-    const { name, imageUrl } = body;
+    const { name, imageUrl, mode } = body;
 
     if (!name) {
       return new Response(JSON.stringify({ error: "Product name/title is required" }), {
@@ -51,12 +51,23 @@ export async function onRequest(context) {
       );
     }
 
+    const targetMode = mode || "professional";
+
+    let modeInstructions = "";
+    if (targetMode === "meme") {
+      modeInstructions = `The copy style MUST be "Meme Material". Make the description, features, tags, and additional notes highly entertaining, funny, and meme-worthy. Use clever puns, internet cultural references, and witty dry humor suitable for a Gen-Z/Gen-Alpha audience, but always maintain e-commerce utility and structure (do not spam emojis or write unreadable slang. It must remain professional+meme a sweet combo, readable, and look like a high-quality product someone would actually buy, just humorous).`;
+    } else {
+      modeInstructions = `The copy style MUST be "Professional". Write formal, clear, factual, and persuasive e-commerce descriptions and key features. Avoid jokes, memes, slang, or casual language. Keep the tone completely business-like.`;
+    }
+
     // Prepare Gemini request contents
     const contentsParts = [];
 
     // Add main text instructions
     contentsParts.push({
-      text: `Analyze the product name: "${name}". Generate a complete, professional, and SEO-optimized e-commerce listing for it. If an image is attached, align the brand, category, description, and features/specifications with what is shown in the image.
+      text: `Analyze the product name: "${name}". Generate a complete and SEO-optimized e-commerce listing for it. If an image is attached, align the brand, category, description, and features/specifications with what is shown in the image.
+
+${modeInstructions}
 
 Suggest a category and a brand that best fits this product. You can suggest a custom category/brand if none of the standard ones fit.
 
@@ -69,14 +80,16 @@ Generate a realistic country of origin (e.g., India, Japan, Germany, USA, etc.).
 Generate some additional notes/information suitable for this product.
 Randomly determine if the product has a warranty and/or guarantee (do not make them identical or always active; make it realistic for the type of product, e.g., some items have neither, some have 6-month warranty, some have a 30-day money-back guarantee, etc.).
 
+Do not generate or modify the product name. In your response, the name field MUST be exactly the input product name: "${name}".
+
 You must return a valid JSON object matching the schema below. Do not include markdown wraps or backticks (e.g. no \`\`\`json). Just the raw JSON.
 
 Schema:
 {
-  "name": "Full, descriptive product name suitable for an e-commerce page",
+  "name": "${name}",
   "brand": "Suggested Brand name",
   "category": "Suggested Category name",
-  "description": "Engaging description highlighting benefits and details (3-4 sentences)",
+  "description": "Engaging description (3-4 sentences)",
   "sellingPrice": 199.00,
   "mrp": 249.00,
   "tags": ["tag1", "tag2", "tag3"],
@@ -88,7 +101,7 @@ Schema:
   "stock": 427,
   "origin": "India",
   "additionalInfo": "Any additional notes/information...",
-  "showOnHome": true,
+  "showOnHome": false,
   "warranty": {
     "available": true,
     "period": "1 year",

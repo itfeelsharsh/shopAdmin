@@ -40,26 +40,78 @@ const EditProduct = () => {
   const [isCreatingBrand, setIsCreatingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState("");
   const [isCreatingBrandSubmitting, setIsCreatingBrandSubmitting] = useState(false);
+
+  // Custom category states
+  const [dynamicCategories, setDynamicCategories] = useState([]);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [isCreatingCategorySubmitting, setIsCreatingCategorySubmitting] = useState(false);
   
   // Custom upload states
   const [dragActive, setDragActive] = useState(false);
   const [uploadQueue, setUploadQueue] = useState([]);
 
   useEffect(() => {
-    // Fetch dynamic brands from settings doc
-    const fetchDynamicBrands = async () => {
+    // Fetch dynamic brands and categories from settings docs
+    const fetchSettings = async () => {
       try {
-        const docRef = doc(db, "settings", "brands");
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data().brands) {
-          setDynamicBrands(docSnap.data().brands);
+        const brandsRef = doc(db, "settings", "brands");
+        const brandsSnap = await getDoc(brandsRef);
+        if (brandsSnap.exists() && brandsSnap.data().brands) {
+          setDynamicBrands(brandsSnap.data().brands);
+        }
+
+        const categoriesRef = doc(db, "settings", "categories");
+        const categoriesSnap = await getDoc(categoriesRef);
+        if (categoriesSnap.exists() && categoriesSnap.data().categories) {
+          setDynamicCategories(categoriesSnap.data().categories);
         }
       } catch (err) {
-        console.error("Error fetching dynamic brands:", err);
+        console.error("Error fetching dynamic settings:", err);
       }
     };
-    fetchDynamicBrands();
+    fetchSettings();
   }, []);
+
+  const handleCreateCategory = async () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      toast.error("Please enter a category name");
+      return;
+    }
+    
+    const allCategories = [...new Set([...productTypes, ...dynamicCategories])].sort();
+    if (allCategories.includes(trimmed)) {
+      toast.error("Category already exists");
+      return;
+    }
+    
+    setIsCreatingCategorySubmitting(true);
+    try {
+      const docRef = doc(db, "settings", "categories");
+      const docSnap = await getDoc(docRef);
+      let list = [];
+      if (docSnap.exists()) {
+        list = docSnap.data().categories || [];
+      }
+      
+      if (!list.includes(trimmed)) {
+        list.push(trimmed);
+        await setDoc(docRef, { categories: list }, { merge: true });
+      }
+      
+      setDynamicCategories([...dynamicCategories, trimmed]);
+      setProduct(prev => ({ ...prev, type: trimmed }));
+      setNewCategoryName("");
+      setIsCreatingCategory(false);
+      toast.success(`Category "${trimmed}" created and selected!`);
+    } catch (error) {
+      console.error("Error creating category:", error);
+      toast.error("Failed to create category");
+    } finally {
+      setIsCreatingCategorySubmitting(false);
+    }
+  };
 
   const handleCreateBrand = async () => {
     const trimmed = newBrandName.trim();
@@ -460,16 +512,53 @@ const EditProduct = () => {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
-                <select
-                  value={product.type}
-                  onChange={(e) => setProduct({ ...product, type: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Category</option>
-                  {productTypes.map((type) => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={product.type}
+                    onChange={(e) => setProduct({ ...product, type: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Category</option>
+                    {[...new Set([...productTypes, ...dynamicCategories])].sort().map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+                {isCreatingCategory ? (
+                  <div className="mt-2 flex gap-2 items-center">
+                    <Input
+                      type="text"
+                      placeholder="New category name"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      className="mb-0 flex-grow"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleCreateCategory}
+                      isLoading={isCreatingCategorySubmitting}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-10 px-3 shrink-0"
+                    >
+                      Create
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => setIsCreatingCategory(false)}
+                      variant="ghost"
+                      className="text-gray-500 text-xs h-10 px-3 shrink-0"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingCategory(true)}
+                    className="mt-2 text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 focus:outline-none"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Create New Category
+                  </button>
+                )}
               </div>
 
               <Input

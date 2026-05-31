@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db, getAppCheckToken } from "../../firebase";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Package, DollarSign, Image as ImageIcon, Tag, Info, Check,
   X, Plus, Trash2, Globe, Shield, Cpu
@@ -31,12 +31,12 @@ const brands = [
 ];
 
 const loadingPhases = [
-  "Analyzing product details... 🔎",
-  "Drafting description & key features... ✍️",
-  "Generating specifications & tags... 🏷️",
-  "Mapping category & warranty details... 🛡️",
-  "Suggesting retail & selling prices... 💰",
-  "Populating your listing form... ✨"
+  "Analyzing product details...",
+  "Drafting description & key features...",
+  "Generating specifications & tags...",
+  "Mapping category & warranty details...",
+  "Suggesting retail & selling prices...",
+  "Populating your listing form..."
 ];
 
 /**
@@ -89,6 +89,9 @@ const AddProduct = () => {
   // Custom upload states
   const [dragActive, setDragActive] = useState(false);
   const [uploadQueue, setUploadQueue] = useState([]);
+
+  // Generation mode: 'professional' or 'meme'
+  const [generationMode, setGenerationMode] = useState("professional");
 
   useEffect(() => {
     // Fetch dynamic brands and categories from settings docs
@@ -290,7 +293,8 @@ const AddProduct = () => {
         headers,
         body: JSON.stringify({
           name: newProduct.name,
-          imageUrl: newProduct.image // use primary image if uploaded
+          imageUrl: newProduct.image, // use primary image if uploaded
+          mode: generationMode
         })
       });
 
@@ -331,17 +335,41 @@ const AddProduct = () => {
           }
         }
 
+        // Auto-validate and generate a unique URL slug based on user's input name
+        const baseSlug = newProduct.name.toLowerCase().trim()
+          .replace(/\s+/g, '-')
+          .replace(/[^\w-]/g, '');
+        
+        let uniqueSlug = baseSlug;
+        let isAvailable = false;
+        let attempt = 0;
+        
+        while (!isAvailable && attempt < 20) {
+          const testSlug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt}`;
+          const docRef = doc(db, "products", testSlug);
+          const docSnap = await getDoc(docRef);
+          if (!docSnap.exists()) {
+            uniqueSlug = testSlug;
+            isAvailable = true;
+          } else {
+            attempt++;
+          }
+        }
+        
+        if (!isAvailable) {
+          uniqueSlug = `${baseSlug}-${Math.random().toString(36).substring(2, 5)}`;
+        }
+
         // Update states
         setNewProduct(prev => ({
           ...prev,
-          name: p.name || prev.name,
           description: p.description || prev.description,
           brand: matchedBrand || prev.brand,
           type: matchedCategory || prev.type,
           stock: p.stock ? String(p.stock) : String(Math.floor(Math.random() * 999) + 1),
           origin: p.origin || prev.origin,
           additionalInfo: p.additionalInfo || prev.additionalInfo,
-          showOnHome: p.showOnHome !== undefined ? !!p.showOnHome : true,
+          showOnHome: false, // AI-generated products should never be showcased on homepage by default
           mrp: p.mrp ? String(p.mrp) : prev.mrp,
           sellingPrice: p.sellingPrice ? String(p.sellingPrice) : prev.sellingPrice,
           price: p.sellingPrice ? String(p.sellingPrice) : prev.price,
@@ -367,11 +395,11 @@ const AddProduct = () => {
             country: p.origin || "",
             deliveryNote: ""
           },
-          slug: p.name ? p.name.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w-]/g, '') : prev.slug
+          slug: uniqueSlug
         }));
 
-        setSlugAvailability({ checked: false, available: false });
-        toast.success("AI generated all product listing fields successfully! Please verify across tabs.");
+        setSlugAvailability({ checked: true, available: true });
+        toast.success("AI generated all product listing fields successfully! URL slug automatically validated.");
       } else {
         throw new Error("Invalid response format from generator");
       }
@@ -622,75 +650,80 @@ const AddProduct = () => {
           animate={{ opacity: 1, x: 0 }}
           className="space-y-6"
         >
-          {/* AI Generator Box */}
-          <div className="relative overflow-hidden bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 rounded-2xl p-6 text-white shadow-xl">
-            <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-            <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-            <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="space-y-1 max-w-2xl">
-                <div className="flex items-center gap-2">
-                  <span className="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
-                    <Cpu className="w-3 h-3 animate-spin" style={{ animationDuration: '3s' }} /> AI Listing Assistant
-                  </span>
-                  <span className="text-xs text-indigo-100">Powered by Gemini 3.5 Flash</span>
-                </div>
-                <h3 className="text-xl font-bold">Generate Product Listing with AI</h3>
-                <p className="text-sm text-indigo-100">
-                  Enter the product name/title below and click generate. AI will automatically construct a high-quality description, category, tags, key features, pricing, specifications, and warranty information. (Optional: upload a primary image first to guide the AI).
-                </p>
+          {/* AI Generator Card */}
+          <Card title="AI Product Listing Generator" icon={<Cpu className="w-5 h-5 text-indigo-600" />}>
+            <div className="space-y-4">
+              <p className="text-sm text-slate-500">
+                To auto-populate your listing, enter a product name under Basic Information, select a generation style, and click the generate button. If you have already uploaded a primary image, it will be analyzed to align details.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
+                  generationMode === 'professional'
+                    ? 'border-[#008060] bg-[#e6f4ea]/20'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50 bg-white'
+                }`}>
+                  <input
+                    type="radio"
+                    name="generationMode"
+                    value="professional"
+                    checked={generationMode === 'professional'}
+                    onChange={() => setGenerationMode('professional')}
+                    className="mt-1 w-4 h-4 text-[#008060] border-gray-300 focus:ring-[#008060]"
+                  />
+                  <div>
+                    <span className="block font-bold text-slate-900 text-sm">Professional Mode</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">Generates formal, premium product copywriting and factual data.</span>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all duration-150 ${
+                  generationMode === 'meme'
+                    ? 'border-[#008060] bg-[#e6f4ea]/20'
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50 bg-white'
+                }`}>
+                  <input
+                    type="radio"
+                    name="generationMode"
+                    value="meme"
+                    checked={generationMode === 'meme'}
+                    onChange={() => setGenerationMode('meme')}
+                    className="mt-1 w-4 h-4 text-[#008060] border-gray-300 focus:ring-[#008060]"
+                  />
+                  <div>
+                    <span className="block font-bold text-slate-900 text-sm">Meme Material Mode</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">Generates witty, slightly edgy copy and puns while keeping listing structure clean.</span>
+                  </div>
+                </label>
               </div>
-              <button
-                type="button"
-                onClick={handleGenerateAI}
-                disabled={aiLoading}
-                className="w-full md:w-auto shrink-0 bg-white text-indigo-700 hover:bg-indigo-50 font-bold px-6 py-3 rounded-xl shadow-md transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {aiLoading ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5 text-indigo-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Auto-Generate Listing ✨</span>
-                  </>
-                )}
-              </button>
-            </div>
-            
-            {/* Multi-stage interactive loading loader */}
-            <AnimatePresence>
-              {aiLoading && currentPhase && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mt-4 pt-4 border-t border-white/20 flex flex-col items-center justify-center"
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-200">
+                <div className="text-xs text-slate-400 font-semibold">
+                  Powered by Gemini 3.5 Flash API
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleGenerateAI}
+                  isLoading={aiLoading}
+                  disabled={aiLoading}
+                  className="w-full sm:w-auto px-6 py-2.5 font-bold"
                 >
-                  <p className="text-sm font-semibold tracking-wide animate-pulse">
+                  Generate Listing
+                </Button>
+              </div>
+
+              {aiLoading && currentPhase && (
+                <div className="mt-2 pt-3 border-t border-gray-200 flex flex-col items-center justify-center">
+                  <p className="text-xs font-semibold text-slate-600 tracking-wide">
                     {currentPhase}
                   </p>
-                  <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden mt-2 max-w-md">
-                    <motion.div
-                      className="bg-white h-full"
-                      animate={{
-                        x: ["-100%", "100%"]
-                      }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 1.5,
-                        ease: "easeInOut"
-                      }}
-                      style={{ width: "40%" }}
-                    />
+                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-2 max-w-md">
+                    <div className="bg-[#008060] h-full animate-pulse w-full"></div>
                   </div>
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
-          </div>
+            </div>
+          </Card>
 
           <Card title="Basic Information" icon={<Package className="w-5 h-5 text-blue-600" />}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
