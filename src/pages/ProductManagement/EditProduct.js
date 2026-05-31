@@ -230,7 +230,12 @@ const EditProduct = () => {
 
     const lines = urlsText
       .split("\n")
-      .map((l) => l.trim())
+      .map((l) => {
+        let trimmed = l.trim();
+        if (!trimmed) return "";
+        const match = trimmed.match(/^(.*\.(?:png|jpg|jpeg|webp|gif|svg|bmp|tiff))(?:[?#].*)?$/i);
+        return match ? match[1] : trimmed;
+      })
       .filter(Boolean);
       
     if (lines.length === 0) {
