@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
-import { db } from "../../firebase";
+import { db, getAppCheckToken } from "../../firebase";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -10,7 +10,7 @@ import {
 import { Button, Card, Input, Alert, Badge, LoadingSpinner } from "../../components/ui";
 import { toast } from "react-toastify";
 import { sendBroadcastNotification } from "../../utils/notificationService";
-import { compressImage, uploadToCDN } from "../../utils/uploadHelper";
+import { processFileItem, uploadToCDN } from "../../utils/uploadHelper";
 
 const productTypes = [
   'Notebooks and Journals', 'Pens and Pencils', 'Paper and Notepads',
@@ -50,6 +50,9 @@ const EditProduct = () => {
   // Custom upload states
   const [dragActive, setDragActive] = useState(false);
   const [uploadQueue, setUploadQueue] = useState([]);
+  const [imageSourceTab, setImageSourceTab] = useState("file");
+  const [urlsText, setUrlsText] = useState("");
+  const [isFetchingUrls, setIsFetchingUrls] = useState(false);
 
   useEffect(() => {
     // Fetch dynamic brands and categories from settings docs
@@ -186,16 +189,18 @@ const EditProduct = () => {
       }
       
       const fileId = Math.random().toString(36).substring(2, 9) + "-" + Date.now();
-      const newQueueItem = { id: fileId, name: file.name, progress: 0, status: "compressing" };
+      const newQueueItem = { id: fileId, name: file.name, progress: 0, status: "processing", info: "Analyzing..." };
       setUploadQueue(prev => [...prev, newQueueItem]);
       
       try {
-        // 1. Client-side compression
-        const compressed = await compressImage(file);
-        setUploadQueue(prev => prev.map(item => item.id === fileId ? { ...item, status: "uploading" } : item));
+        // 1. Client-side smart processing
+        const { processedFile, processingStatuses } = await processFileItem(file);
+        const infoText = processingStatuses.join(" • ") || "Ready";
+        
+        setUploadQueue(prev => prev.map(item => item.id === fileId ? { ...item, status: "uploading", info: infoText } : item));
         
         // 2. Upload to CDN
-        const cdnUrl = await uploadToCDN(compressed, (percent) => {
+        const cdnUrl = await uploadToCDN(processedFile, (percent) => {
           setUploadQueue(prev => prev.map(item => item.id === fileId ? { ...item, progress: percent } : item));
         });
         
@@ -214,6 +219,72 @@ const EditProduct = () => {
         setUploadQueue(prev => prev.map(item => item.id === fileId ? { ...item, status: "error", errorMsg: err.message } : item));
         toast.error(`Failed to upload ${file.name}: ${err.message}`);
       }
+    }
+  };
+
+  const handleImportUrls = async () => {
+    if (!urlsText.trim()) {
+      toast.error("Please enter at least one URL");
+      return;
+    }
+
+    const lines = urlsText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+      
+    if (lines.length === 0) {
+      toast.error("No valid URLs found");
+      return;
+    }
+
+    setIsFetchingUrls(true);
+    let successCount = 0;
+
+    for (const url of lines) {
+      try {
+        new URL(url); // syntax validation
+        const appCheckToken = await getAppCheckToken();
+        const headers = {};
+        if (appCheckToken) {
+          headers["X-Firebase-AppCheck"] = appCheckToken;
+        }
+
+        const apiBase = window.location.hostname === 'localhost' ? 'http://localhost:8788' : '';
+        const res = await fetch(`${apiBase}/api/proxy-image?url=${encodeURIComponent(url)}`, { headers });
+        
+        if (!res.ok) {
+          throw new Error(`Proxy fetch returned status ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        const contentType = res.headers.get("content-type") || blob.type || "application/octet-stream";
+        
+        let filename = "";
+        try {
+          const u = new URL(url);
+          const pathSegment = u.pathname.split("/").pop();
+          filename = pathSegment ? decodeURIComponent(pathSegment) : "";
+        } catch {}
+
+        if (!filename) {
+          const ext = contentType.split("/")[1] || "jpg";
+          filename = `imported-image-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+        }
+
+        const file = new File([blob], filename, { type: contentType });
+        await processFiles([file]);
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to import URL ${url}:`, err);
+        toast.error(`Import failed: ${url.substring(0, 45)}... (${err.message})`);
+      }
+    }
+
+    setIsFetchingUrls(false);
+    setUrlsText("");
+    if (successCount > 0) {
+      toast.success(`Successfully imported ${successCount} image(s)`);
     }
   };
 
@@ -680,35 +751,94 @@ const EditProduct = () => {
           className="space-y-6"
         >
           <Card title="Product Images" icon={<ImageIcon className="w-5 h-5 text-pink-600" />}>
-            {/* Drag & Drop Zone */}
-            <div
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              onClick={() => document.getElementById("file-upload").click()}
-              className={`mb-6 border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 ${
-                dragActive
-                  ? "border-blue-500 bg-blue-50/50 scale-[1.01]"
-                  : "border-gray-300 hover:border-blue-400 hover:bg-gray-50/50"
-              }`}
-            >
-              <input
-                id="file-upload"
-                type="file"
-                multiple
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-              <div className="flex flex-col items-center justify-center space-y-2">
-                <div className="p-3 bg-blue-50 rounded-full text-blue-500">
-                  <ImageIcon className="w-8 h-8 animate-bounce" />
-                </div>
-                <p className="font-semibold text-gray-700">Drag and drop images here, or click to browse</p>
-                <p className="text-xs text-gray-400 font-medium">Images will be compressed client-side (WhatsApp-like compression) and uploaded automatically to the CDN</p>
-              </div>
+            {/* Source Sub-Tabs */}
+            <div className="flex border-b border-gray-200 mb-4 mt-2">
+              <button
+                type="button"
+                onClick={() => setImageSourceTab("file")}
+                className={`px-4 py-2 font-semibold text-sm border-b-2 transition-all ${
+                  imageSourceTab === "file"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                File Upload
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageSourceTab("url")}
+                className={`px-4 py-2 font-semibold text-sm border-b-2 transition-all ${
+                  imageSourceTab === "url"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Import from URLs
+              </button>
             </div>
+
+            {imageSourceTab === "file" ? (
+              /* Drag & Drop Zone */
+              <div
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                onClick={() => document.getElementById("file-upload").click()}
+                className={`mb-6 border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 ${
+                  dragActive
+                    ? "border-blue-500 bg-blue-50/50 scale-[1.01]"
+                    : "border-gray-300 hover:border-blue-400 hover:bg-gray-50/50"
+                }`}
+              >
+                <input
+                  id="file-upload"
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+                <div className="flex flex-col items-center justify-center space-y-2">
+                  <div className="p-3 bg-blue-50 rounded-full text-blue-500">
+                    <ImageIcon className="w-8 h-8 animate-bounce" />
+                  </div>
+                  <p className="font-semibold text-gray-700">Drag and drop images here, or click to browse</p>
+                  <p className="text-xs text-gray-400 font-medium">Images will be run through the background processing/optimization pipeline and uploaded to the CDN</p>
+                </div>
+              </div>
+            ) : (
+              /* Import from URLs Input Panel */
+              <div className="bg-gray-50 border border-gray-150 rounded-xl p-6 mb-6 space-y-4">
+                <div className="space-y-1">
+                  <label htmlFor="url-import-input" className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Enter Third-Party Image URLs
+                  </label>
+                  <textarea
+                    id="url-import-input"
+                    rows={4}
+                    placeholder="Paste image URLs here (one URL per line)...&#10;Example:&#10;https://another-shop.com/product.png&#10;https://shopify-store.com/shoes.jpg"
+                    className="w-full rounded-lg border border-gray-300 bg-white p-3 font-mono text-xs text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
+                    value={urlsText}
+                    onChange={(e) => setUrlsText(e.target.value)}
+                    disabled={isFetchingUrls}
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <span className="text-[11px] text-gray-400 font-medium">
+                    URLs will be requested via proxy, processed (white BG overlay/compression checks), and queued.
+                  </span>
+                  <Button
+                    type="button"
+                    onClick={handleImportUrls}
+                    disabled={isFetchingUrls || !urlsText.trim()}
+                    className="w-full sm:w-auto px-5 py-2 font-bold bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                  >
+                    {isFetchingUrls ? "Importing..." : "Import Images"}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Upload Queue Progress */}
             {uploadQueue.length > 0 && (
@@ -716,10 +846,12 @@ const EditProduct = () => {
                 {uploadQueue.map(item => (
                   <div key={item.id} className="bg-gray-50 border border-gray-150 rounded-lg p-3 flex flex-col space-y-1.5">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-gray-700 truncate max-w-[70%]">{item.name}</span>
+                      <span className="font-semibold text-gray-700 truncate max-w-[45%]">{item.name}</span>
+                      {item.info && <span className="text-[10px] text-indigo-650 font-semibold">{item.info}</span>}
                       <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                        item.status === 'compressing' ? 'bg-amber-100 text-amber-700' :
-                        item.status === 'uploading' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                        item.status === 'processing' ? 'bg-amber-100 text-amber-700' :
+                        item.status === 'uploading' ? 'bg-blue-100 text-blue-700' : 
+                        item.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
                       }`}>
                         {item.status} {item.status === 'uploading' ? `${item.progress}%` : ''}
                       </span>

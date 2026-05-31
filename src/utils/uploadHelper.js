@@ -8,62 +8,205 @@ import { getAppCheckToken } from "../firebase";
  * @param {Object} options - Compression options
  * @returns {Promise<File>} - Resolves to the compressed File object
  */
-export const compressImage = (file, options = {}) => {
-  const { maxWidth = 1200, maxHeight = 1200, quality = 0.8 } = options;
-  
-  return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) {
-      return reject(new Error('File is not an image'));
+/**
+ * Checks if a PNG image file has any transparent pixels, and if so,
+ * overlays it on a solid white background and returns a new PNG File.
+ * 
+ * @param {File} file - The original file
+ * @returns {Promise<File>} - Resolves to the processed File object
+ */
+export const addWhiteBackgroundIfTransparent = (file) => {
+  return new Promise((resolve) => {
+    if (file.type !== "image/png" && !file.name.toLowerCase().endsWith(".png")) {
+      resolve(file);
+      return;
     }
-    
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target.result;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        
-        // Calculate new dimensions maintaining aspect ratio
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
+
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0);
+
+        // Scan pixels for transparency in alpha channel
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        let hasTransparency = false;
+
+        for (let i = 3; i < data.length; i += 4) {
+          if (data[i] < 255) {
+            hasTransparency = true;
+            break;
           }
         }
-        
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        
+
+        if (hasTransparency) {
+          // Clear and paint white background
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          // Draw image on top of white
+          ctx.drawImage(img, 0, 0);
+
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const processedFile = new File([blob], file.name, {
+                type: "image/png",
+                lastModified: Date.now(),
+              });
+              resolve(processedFile);
+            } else {
+              resolve(file);
+            }
+          }, "image/png");
+        } else {
+          resolve(file);
+        }
+      } catch (err) {
+        console.error("Canvas processing error:", err);
+        resolve(file);
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+
+    img.src = objectUrl;
+  });
+};
+
+/**
+ * Compresses an image file by drawing it to a canvas and exporting as image/jpeg.
+ * 
+ * @param {File} file - The original file
+ * @param {number} quality - Compression quality (0 to 1)
+ * @returns {Promise<File>} - Resolves to the compressed File object
+ */
+export const compressImageUsingCanvas = (file, quality = 0.8) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0);
+
         canvas.toBlob(
           (blob) => {
             if (blob) {
-              const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
-                type: 'image/jpeg',
-                lastModified: Date.now()
+              let newName = file.name;
+              if (!newName.toLowerCase().endsWith(".jpg") && !newName.toLowerCase().endsWith(".jpeg")) {
+                const parts = newName.split(".");
+                if (parts.length > 1) parts.pop();
+                newName = parts.join(".") + ".jpg";
+              }
+              const compressedFile = new File([blob], newName, {
+                type: "image/jpeg",
+                lastModified: Date.now(),
               });
               resolve(compressedFile);
             } else {
-              reject(new Error('Canvas compression failed'));
+              resolve(file);
             }
           },
-          'image/jpeg',
+          "image/jpeg",
           quality
         );
-      };
-      img.onerror = (err) => reject(err);
+      } catch (e) {
+        console.error("Canvas compression error:", e);
+        resolve(file);
+      }
     };
-    reader.onerror = (err) => reject(err);
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+
+    img.src = objectUrl;
   });
+};
+
+/**
+ * Image processing pipeline for a single file.
+ * 1. Checks PNG transparency and adds solid white background if found.
+ * 2. Compresses images ONLY if their size is less than 555 KB.
+ * 3. Keeps the original if compression fails or makes the file size larger.
+ * 
+ * @param {File} file - The original file
+ * @returns {Promise<{processedFile: File, originalSize: number, processingStatuses: string[]}>}
+ */
+export const processFileItem = async (file) => {
+  const originalSize = file.size;
+  const statuses = [];
+  let currentFile = file;
+
+  // 1. Transparency check for PNGs
+  if (file.type === "image/png" || file.name.toLowerCase().endsWith(".png")) {
+    const backgroundFile = await addWhiteBackgroundIfTransparent(file);
+    if (backgroundFile !== file) {
+      currentFile = backgroundFile;
+      statuses.push("White BG Added");
+    }
+  }
+
+  // 2. Smart compression if size < 555 KB
+  if (currentFile.type.startsWith("image/") && currentFile.size < 555 * 1024) {
+    try {
+      const compressedFile = await compressImageUsingCanvas(currentFile, 0.85);
+      if (compressedFile.size < currentFile.size) {
+        const savings = Math.round(((currentFile.size - compressedFile.size) / currentFile.size) * 100);
+        currentFile = compressedFile;
+        statuses.push(`Compressed (-${savings}%)`);
+      } else {
+        statuses.push("Original Kept (Compressed is larger)");
+      }
+    } catch (e) {
+      console.error("Compression error:", e);
+      statuses.push("Compression failed");
+    }
+  } else if (currentFile.type.startsWith("image/")) {
+    statuses.push("Original Kept (Size >= 555KB)");
+  }
+
+  return {
+    processedFile: currentFile,
+    originalSize,
+    processingStatuses: statuses,
+  };
+};
+
+/**
+ * Legacy compressImage mapping to support existing code with smart pipeline
+ */
+export const compressImage = async (file) => {
+  const result = await processFileItem(file);
+  return result.processedFile;
 };
 
 /**
