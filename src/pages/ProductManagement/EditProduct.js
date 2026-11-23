@@ -1090,6 +1090,7 @@ const EditProduct = () => {
             category={product.type}
             brand={product.brand}
             productName={product.name}
+            price={product.sellingPrice || product.price}
             onChange={(options) => setProduct((prev) => ({ ...prev, options }))}
           />
 

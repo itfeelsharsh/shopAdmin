@@ -216,6 +216,7 @@ export const generateOptionsWithAI = async ({
   name,
   category,
   brand,
+  basePrice = 0,
   existingOptions = [],
   catalogueOptions = [],
 }) => {
@@ -234,6 +235,7 @@ export const generateOptionsWithAI = async ({
       name: text(name),
       category: text(category),
       brand: text(brand),
+      basePrice: Number(basePrice) || 0,
       existingOptions: normalizeOptions(existingOptions),
       catalogueOptions: normalizeOptions(catalogueOptions),
     }),

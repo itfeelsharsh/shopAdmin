@@ -1465,6 +1465,7 @@ const AddProduct = () => {
             category={newProduct.type}
             brand={newProduct.brand}
             productName={newProduct.name}
+            price={newProduct.sellingPrice || newProduct.price}
             onChange={(options) => setNewProduct((prev) => ({ ...prev, options }))}
           />
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, Trash2, Zap, Sliders, RefreshCw, Layers } from "react-feather";
+import { Plus, Trash2, Zap, Sliders, RefreshCw, Layers } from "react-feather";
 import { toast } from "react-toastify";
 import { Card, Button, Input } from "./ui";
 import {
@@ -13,12 +13,20 @@ import {
   loadOptionCatalog,
 } from "../utils/optionCatalog";
 
+const clean = (value) => String(value ?? "").trim();
+
+const formatDelta = (amount) => {
+  const number = Number(amount) || 0;
+  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(number);
+};
+
+const getGroupValues = (group) => normalizeOptions([group])[0]?.values || [];
+
 /**
  * Dynamic, catalogue-driven product options editor.
  *
- * No hard-coded category presets. Suggestions come from real products in the
- * selected category/brand, saved templates, or AI, and every group remains
- * manually editable.
+ * Every value can carry an extra INR amount. The product's stored price is the
+ * base variant; customers see base + selected extras on the storefront.
  */
 const ProductOptionsEditor = ({
   options = [],
@@ -26,6 +34,7 @@ const ProductOptionsEditor = ({
   category = "",
   brand = "",
   productName = "",
+  price = "",
 }) => {
   const [newValues, setNewValues] = useState({});
   const [newGroupName, setNewGroupName] = useState("");
@@ -37,7 +46,8 @@ const ProductOptionsEditor = ({
 
   const safeOptions = useMemo(() => (Array.isArray(options) ? options : []), [options]);
   const normalizedOptions = useMemo(() => normalizeOptions(safeOptions), [safeOptions]);
-  const catalogKey = `${String(category || "").trim()}|${String(brand || "").trim()}`;
+  const basePrice = Number(price) || 0;
+  const catalogKey = `${clean(category)}|${clean(brand)}`;
 
   const hasCategorySuggestions = Boolean(category) && catalog.categoryGroups.length > 0;
   const hasBrandSuggestions = Boolean(brand) && catalog.brandGroups.length > 0;
@@ -91,8 +101,7 @@ const ProductOptionsEditor = ({
     };
   }, [category, brand]);
 
-  // A saved category/brand template automatically seeds a brand-new listing,
-  // so repeat products in the same family stay consistent without hard-coding.
+  // A saved category/brand template automatically seeds a brand-new listing.
   useEffect(() => {
     if (!catalog.loaded || catalog.key !== catalogKey) return;
     if (autoSeededKeyRef.current === catalogKey) return;
@@ -116,7 +125,7 @@ const ProductOptionsEditor = ({
   };
 
   const handleAiSuggest = async () => {
-    if (!String(productName || "").trim()) {
+    if (!clean(productName)) {
       toast.error("Enter a product name first so AI knows what it is selling.");
       return;
     }
@@ -127,6 +136,7 @@ const ProductOptionsEditor = ({
         name: productName,
         category,
         brand,
+        basePrice,
         existingOptions: normalizedOptions,
         catalogueOptions: catalog.mergedGroups,
       });
@@ -152,7 +162,7 @@ const ProductOptionsEditor = ({
   };
 
   const addGroup = (preset = null) => {
-    const name = String(preset?.name || newGroupName || "").trim();
+    const name = clean(preset?.name || newGroupName);
     if (!name) return;
 
     const existing = normalizedOptions.find(
@@ -160,7 +170,6 @@ const ProductOptionsEditor = ({
     );
 
     if (existing) {
-      // Reuse the existing group instead of creating a duplicate.
       applyGroups([{ ...existing, ...(preset || {}), name: existing.name }]);
       if (!preset) setNewGroupName("");
       return;
@@ -170,7 +179,7 @@ const ProductOptionsEditor = ({
       ...safeOptions,
       {
         name,
-        values: Array.isArray(preset?.values) ? [...preset.values] : [],
+        values: normalizeOptions([preset || {}])[0]?.values || [],
         required: preset?.required !== false,
       },
     ]);
@@ -186,27 +195,50 @@ const ProductOptionsEditor = ({
     });
   };
 
+  const getValueDraft = (index) => newValues[index] || { label: "", priceDelta: "" };
+
+  const setValueDraft = (index, field, value) => {
+    setNewValues((prev) => ({
+      ...prev,
+      [index]: { ...(prev[index] || { label: "", priceDelta: "" }), [field]: value },
+    }));
+  };
+
   const addValue = (index) => {
-    const raw = String(newValues[index] || "").trim();
-    if (!raw) return;
+    const draft = getValueDraft(index);
+    const label = clean(draft.label);
+    if (!label) return;
 
     const group = safeOptions[index];
     if (!group) return;
 
-    const values = Array.isArray(group.values) ? group.values : [];
-    if (values.some((value) => value.toLowerCase() === raw.toLowerCase())) {
-      setNewValues((prev) => ({ ...prev, [index]: "" }));
+    const values = getGroupValues(group);
+    if (values.some((value) => value.label.toLowerCase() === label.toLowerCase())) {
+      toast.info(`“${label}” already exists in ${group.name}.`);
       return;
     }
 
-    updateGroup(index, { values: [...values, raw] });
-    setNewValues((prev) => ({ ...prev, [index]: "" }));
+    const priceDelta = Math.round(Number(draft.priceDelta) || 0);
+    updateGroup(index, { values: [...values, { label, priceDelta }] });
+    setNewValues((prev) => ({ ...prev, [index]: { label: "", priceDelta: "" } }));
   };
 
-  const removeValue = (index, value) => {
-    const group = safeOptions[index];
+  const updateValue = (groupIndex, valueIndex, patch) => {
+    const group = safeOptions[groupIndex];
     if (!group) return;
-    updateGroup(index, { values: (group.values || []).filter((entry) => entry !== value) });
+
+    const values = getGroupValues(group).map((value, index) =>
+      index === valueIndex ? { ...value, ...patch } : value
+    );
+    updateGroup(groupIndex, { values });
+  };
+
+  const removeValue = (groupIndex, valueIndex) => {
+    const group = safeOptions[groupIndex];
+    if (!group) return;
+
+    const values = getGroupValues(group).filter((_, index) => index !== valueIndex);
+    updateGroup(groupIndex, { values });
   };
 
   const renderSuggestion = (group, source) => (
@@ -214,7 +246,7 @@ const ProductOptionsEditor = ({
       key={`${source}-${group.name}`}
       type="button"
       onClick={() => applyGroups([group])}
-      className="group flex w-full items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-sm"
+      className="flex w-full items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-sm"
     >
       <span className="min-w-0">
         <span className="flex items-center gap-1.5 text-xs font-bold text-gray-800">
@@ -222,7 +254,14 @@ const ProductOptionsEditor = ({
           {group.name}
         </span>
         <span className="mt-0.5 block truncate text-[11px] font-medium text-gray-400">
-          {group.values.slice(0, 6).join(" / ")}
+          {group.values
+            .slice(0, 5)
+            .map((value) =>
+              value.priceDelta
+                ? `${value.label} (+₹${formatDelta(value.priceDelta)})`
+                : value.label
+            )
+            .join(" / ")}
         </span>
       </span>
       <span className="shrink-0 rounded-full bg-gray-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
@@ -235,17 +274,22 @@ const ProductOptionsEditor = ({
     <Card title="Product Options" icon={<Sliders className="w-5 h-5 text-violet-600" />}>
       <div className="space-y-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <p className="max-w-xl text-sm text-slate-500">
-            Add real choices customers must make before buying. Suggestions are learned from
-            products already in this category/brand, generated by AI, or added manually.
-            Everything is editable.
-          </p>
+          <div className="max-w-xl space-y-1">
+            <p className="text-sm text-slate-500">
+              Add real choices customers must make before buying. Each value can add an extra
+              INR amount on top of the base price — perfect for storage, size or material upgrades.
+            </p>
+            <p className="text-xs text-slate-400">
+              Base price: {basePrice ? `₹${formatDelta(basePrice)}` : "set it in Pricing"}. The selected
+              extras are added to this amount at checkout.
+            </p>
+          </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button
               type="button"
               onClick={handleAiSuggest}
               loading={aiLoading}
-              disabled={aiLoading || !String(productName || "").trim()}
+              disabled={aiLoading || !clean(productName)}
               icon={<Zap className="w-4 h-4" />}
               className="!bg-violet-600 hover:!bg-violet-700"
             >
@@ -264,13 +308,12 @@ const ProductOptionsEditor = ({
           </div>
         </div>
 
-        {!String(productName || "").trim() && (
+        {!clean(productName) && (
           <p className="text-xs font-medium text-amber-600">
             Enter a product name in Basic Info to enable AI suggestions.
           </p>
         )}
 
-        {/* Catalogue suggestions */}
         {catalogLoading ? (
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
@@ -332,8 +375,8 @@ const ProductOptionsEditor = ({
           <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/60 p-4">
             <p className="text-sm font-semibold text-gray-700">No existing options yet</p>
             <p className="mt-1 text-xs text-gray-500">
-              This is the first product in this category/brand with options. Ask AI or create
-              your own below — it will be remembered for future products automatically.
+              First listing in this category/brand. Ask AI or create your own below — it will be
+              remembered for future products automatically.
             </p>
           </div>
         )}
@@ -347,102 +390,144 @@ const ProductOptionsEditor = ({
           </div>
         )}
 
-        {/* Existing option groups */}
         <AnimatePresence initial={false}>
-          {safeOptions.map((group, index) => (
-            <motion.div
-              key={index}
-              layout
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, height: 0 }}
-              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex-1">
-                  <Input
-                    label={`Option ${index + 1}`}
-                    placeholder="e.g. Size"
-                    value={group.name}
-                    onChange={(event) => updateGroup(index, { name: event.target.value })}
-                    className="mb-0"
-                  />
+          {safeOptions.map((group, index) => {
+            const values = getGroupValues(group);
+            const draft = getValueDraft(index);
+
+            return (
+              <motion.div
+                key={index}
+                layout
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, height: 0 }}
+                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="flex-1">
+                    <Input
+                      label={`Option ${index + 1}`}
+                      placeholder="e.g. Storage"
+                      value={group.name}
+                      onChange={(event) => updateGroup(index, { name: event.target.value })}
+                      className="mb-0"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 sm:mt-5">
+                    <input
+                      type="checkbox"
+                      checked={group.required !== false}
+                      onChange={(event) => updateGroup(index, { required: event.target.checked })}
+                      className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                    />
+                    Required
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => removeGroup(index)}
+                    className="mt-1 self-start rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 sm:mt-5"
+                    aria-label={`Remove ${group.name || "option"}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 sm:mt-5">
-                  <input
-                    type="checkbox"
-                    checked={group.required !== false}
-                    onChange={(event) => updateGroup(index, { required: event.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
-                  />
-                  Required
-                </label>
-                <button
-                  type="button"
-                  onClick={() => removeGroup(index)}
-                  className="mt-1 self-start rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 sm:mt-5"
-                  aria-label={`Remove ${group.name || "option"}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                <AnimatePresence initial={false}>
-                  {(group.values || []).map((value) => (
-                    <motion.span
-                      key={value}
-                      layout
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700"
-                    >
-                      {value}
-                      <button
-                        type="button"
-                        onClick={() => removeValue(index, value)}
-                        className="rounded-full p-0.5 text-gray-400 transition-colors hover:bg-white hover:text-red-500"
-                        aria-label={`Remove ${value}`}
+                <div className="mt-3 space-y-2">
+                  <AnimatePresence initial={false}>
+                    {values.map((value, valueIndex) => (
+                      <motion.div
+                        key={valueIndex}
+                        layout
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50/70 p-2.5 sm:flex-row sm:items-center"
                       >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </motion.span>
-                  ))}
-                </AnimatePresence>
-              </div>
+                        <Input
+                          value={value.label}
+                          onChange={(event) =>
+                            updateValue(index, valueIndex, { label: event.target.value })
+                          }
+                          placeholder="Value"
+                          className="mb-0 flex-1"
+                        />
+                        <div className="relative w-full sm:w-40">
+                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">
+                            +₹
+                          </span>
+                          <input
+                            type="number"
+                            value={value.priceDelta || ""}
+                            onChange={(event) =>
+                              updateValue(index, valueIndex, {
+                                priceDelta: Math.round(Number(event.target.value) || 0),
+                              })
+                            }
+                            placeholder="0"
+                            className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm font-semibold text-gray-900 outline-none transition focus:ring-2 focus:ring-violet-300"
+                            aria-label={`Extra price for ${value.label || "value"}`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeValue(index, valueIndex)}
+                          className="self-end rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 sm:self-auto"
+                          aria-label={`Remove ${value.label || "value"}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
 
-              <div className="mt-3 flex gap-2">
-                <Input
-                  placeholder={`Add value${group.name ? ` for ${group.name}` : ""}`}
-                  value={newValues[index] || ""}
-                  onChange={(event) =>
-                    setNewValues((prev) => ({ ...prev, [index]: event.target.value }))
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addValue(index);
-                    }
-                  }}
-                  className="mb-0 flex-1"
-                />
-                <Button
-                  type="button"
-                  onClick={() => addValue(index)}
-                  icon={<Plus className="w-4 h-4" />}
-                  className="shrink-0"
-                >
-                  Add
-                </Button>
-              </div>
-            </motion.div>
-          ))}
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <Input
+                    placeholder={`Add value${group.name ? ` for ${group.name}` : ""}`}
+                    value={draft.label}
+                    onChange={(event) => setValueDraft(index, "label", event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addValue(index);
+                      }
+                    }}
+                    className="mb-0 flex-1"
+                  />
+                  <div className="relative w-full sm:w-40">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">
+                      +₹
+                    </span>
+                    <input
+                      type="number"
+                      value={draft.priceDelta}
+                      onChange={(event) => setValueDraft(index, "priceDelta", event.target.value)}
+                      placeholder="Extra price"
+                      className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none transition focus:ring-2 focus:ring-violet-300"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => addValue(index)}
+                    icon={<Plus className="w-4 h-4" />}
+                    className="shrink-0"
+                  >
+                    Add value
+                  </Button>
+                </div>
+
+                <p className="mt-2 text-[11px] text-gray-400">
+                  Extra price is added to the base product price. Leave it at 0 for the standard variant.
+                </p>
+              </motion.div>
+            );
+          })}
         </AnimatePresence>
 
         <div className="flex flex-col gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-4 sm:flex-row sm:items-center">
           <Input
-            placeholder="New option group, e.g. Capacity"
+            placeholder="New option group, e.g. Storage"
             value={newGroupName}
             onChange={(event) => setNewGroupName(event.target.value)}
             onKeyDown={(event) => {
@@ -466,7 +551,7 @@ const ProductOptionsEditor = ({
         </div>
 
         <p className="text-xs text-gray-400">
-          Saving the product remembers these groups for the {category || "selected"} category
+          Saving remembers these groups for the {category || "selected"} category
           {brand ? ` and ${brand}` : ""} — future listings can reuse them automatically.
         </p>
       </div>

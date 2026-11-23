@@ -174,7 +174,7 @@ const ProductManager = () => {
         product.type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.options?.some((group) =>
           group?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          group?.values?.some((value) => String(value).toLowerCase().includes(searchTerm.toLowerCase()))
+          group?.values?.some((value) => String(value?.label || '').toLowerCase().includes(searchTerm.toLowerCase()))
         )
       );
     }

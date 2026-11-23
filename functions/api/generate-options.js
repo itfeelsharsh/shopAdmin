@@ -40,17 +40,39 @@ const normalizeOptions = (input) => {
 
     const group = byName.get(key);
     for (const rawValue of Array.isArray(raw?.values) ? raw.values : []) {
-      const value = cleanText(rawValue).slice(0, MAX_VALUE_LENGTH);
-      if (!value) continue;
-      if (group.values.some((existing) => existing.toLowerCase() === value.toLowerCase())) continue;
+      const isObject = rawValue && typeof rawValue === "object";
+      const label = cleanText(
+        isObject ? rawValue.label ?? rawValue.value ?? rawValue.name : rawValue
+      ).slice(0, MAX_VALUE_LENGTH);
+      if (!label) continue;
+      if (group.values.some((existing) => existing.label.toLowerCase() === label.toLowerCase())) continue;
       if (group.values.length >= MAX_VALUES) break;
-      group.values.push(value);
+
+      const rawDelta = isObject
+        ? rawValue.priceDelta ?? rawValue.price_delta ?? rawValue.extraPrice ?? 0
+        : 0;
+      const numericDelta = Number(rawDelta);
+
+      group.values.push({
+        label,
+        priceDelta: Number.isFinite(numericDelta) ? Math.round(numericDelta) : 0,
+      });
     }
   }
 
   return Array.from(byName.values())
     .filter((group) => group.values.length >= 1)
-    .slice(0, MAX_GROUPS);
+    .slice(0, MAX_GROUPS)
+    .map((group) => {
+      const cheapest = Math.min(...group.values.map((value) => value.priceDelta));
+      if (cheapest !== 0) {
+        group.values = group.values.map((value) => ({
+          ...value,
+          priceDelta: value.priceDelta - cheapest,
+        }));
+      }
+      return group;
+    });
 };
 
 const stripCodeFence = (value) =>
@@ -107,12 +129,13 @@ async function callXai({ apiKey, model, prompt }) {
   return data.choices?.[0]?.message?.content || "";
 }
 
-function buildPrompt({ name, category, brand, existingOptions, catalogueOptions }) {
+function buildPrompt({ name, category, brand, basePrice, existingOptions, catalogueOptions }) {
   return `You are KamiKoto's product merchandising engine. Work out the REAL purchasable option groups for one product.
 
 Product name: ${name || "Unknown"}
 Category: ${category || "Unknown"}
 Brand: ${brand || "Unknown"}
+Base selling price (INR): ${basePrice ? `₹${basePrice}` : "Unknown"}
 
 Options currently on this product:
 ${JSON.stringify(existingOptions).slice(0, 2500)}
@@ -121,14 +144,17 @@ Options already used by products in this category/brand (reuse their naming and 
 ${JSON.stringify(catalogueOptions).slice(0, 3500)}
 
 Return ONLY valid JSON in exactly this shape:
-{"options":[{"name":"Size","values":["S","M","L"],"required":true}]}
+{"options":[{"name":"Storage","values":[{"label":"256GB","priceDelta":0},{"label":"512GB","priceDelta":20000}],"required":true}]}
 
 Rules:
 - 0 to 4 groups. Use [] when the product truly has no purchasable variations.
 - Every group is a choice the customer MUST make before buying (size, colour, capacity, pack count, material, etc.).
-- Do not include price, stock, warranty, marketing copy or generic specifications.
+- Do not include stock, warranty, marketing copy or generic specifications.
 - Reuse existing catalogue names/values where appropriate so the store stays consistent.
 - 2 to 8 concrete values per group. Short, human-readable labels only.
+- Every value needs "label" and "priceDelta" (whole INR, can be 0 or negative).
+- The cheapest/base variant must have priceDelta 0. Upgrades add realistic INR amounts on top of the base price.
+- Examples: a MacBook with a ₹1,14,900 base and 512GB upgrade might use +₹20,000; an iPhone 1TB option might use +₹40,000.
 - Mark a group required unless it is genuinely optional.`;
 }
 
@@ -160,6 +186,7 @@ export async function onRequest(context) {
   const name = cleanText(body?.name);
   const category = cleanText(body?.category);
   const brand = cleanText(body?.brand);
+  const basePrice = Math.max(0, Math.round(Number(body?.basePrice) || 0));
   const existingOptions = normalizeOptions(body?.existingOptions);
   const catalogueOptions = normalizeOptions(body?.catalogueOptions);
 
@@ -212,6 +239,7 @@ export async function onRequest(context) {
     name,
     category,
     brand,
+    basePrice,
     existingOptions,
     catalogueOptions,
   });
