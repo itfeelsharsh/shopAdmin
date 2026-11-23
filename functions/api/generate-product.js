@@ -15,6 +15,28 @@ function getCORSHeaders(request) {
  * admin form. Explicit $ / USD values are converted; plain numbers are treated
  * as INR as instructed by the prompt.
  */
+const stripCodeFence = (value) =>
+  String(value ?? "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+async function callWorkersAIProduct(env, prompt) {
+  if (!env?.AI?.run) return "";
+
+  const result = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+    messages: [
+      { role: "system", content: "You are a precise e-commerce catalogue editor. Output only raw valid JSON, no markdown." },
+      { role: "user", content: prompt },
+    ],
+    max_tokens: 2200,
+    temperature: 0.3,
+  });
+
+  return result?.response || result?.choices?.[0]?.message?.content || "";
+}
+
 function parseMoney(value) {
   if (value === null || value === undefined || value === "") {
     return { amount: null, currency: null };
@@ -426,6 +448,23 @@ Schema:
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[AI Generator] Gemini API error:', errorText);
+
+        // Final safety net: use the Workers AI binding if Gemini/xAI quotas run out.
+        if (env?.AI?.run) {
+          try {
+            const aiText = await callWorkersAIProduct(env, textPrompt);
+            if (aiText) {
+              productDetails = normalizeAiPricing(JSON.parse(stripCodeFence(aiText)), env);
+              return new Response(JSON.stringify({ success: true, product: productDetails }), {
+                status: 200,
+                headers: getCORSHeaders(request),
+              });
+            }
+          } catch (aiError) {
+            console.warn('[AI Generator] Workers AI fallback failed:', aiError.message || aiError);
+          }
+        }
+
         // If model not found (404), provide a clearer hint
         if (response.status === 404) {
           console.error('[AI Generator] Gemini model not found. Attempting to list available models...');

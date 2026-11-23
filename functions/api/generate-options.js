@@ -82,6 +82,21 @@ const stripCodeFence = (value) =>
     .replace(/\s*```$/i, "")
     .trim();
 
+async function callWorkersAI(env, prompt) {
+  if (!env?.AI?.run) return "";
+
+  const result = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+    messages: [
+      { role: "system", content: "You are a precise product catalogue editor. Output only valid JSON, no markdown." },
+      { role: "user", content: prompt },
+    ],
+    max_tokens: 1800,
+    temperature: 0.25,
+  });
+
+  return result?.response || result?.choices?.[0]?.message?.content || "";
+}
+
 async function callGemini({ apiKey, model, prompt }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const response = await fetch(url, {
@@ -257,6 +272,16 @@ export async function onRequest(context) {
     } catch (error) {
       errors.push(error.message || String(error));
       console.warn(`[AI Options] ${candidate.provider}/${candidate.model} failed:`, error.message || error);
+    }
+  }
+
+  if (!rawText && env?.AI?.run) {
+    try {
+      rawText = await callWorkersAI(env, prompt);
+      if (rawText) console.log("[AI Options] Used Cloudflare Workers AI fallback");
+    } catch (aiError) {
+      errors.push(aiError.message || String(aiError));
+      console.warn("[AI Options] Workers AI fallback failed:", aiError.message || aiError);
     }
   }
 
