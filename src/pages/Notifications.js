@@ -41,9 +41,20 @@ const Notifications = () => {
         if (result.message === 'No users to notify') {
           toast.info("No devices registered to receive notifications yet.");
         } else {
-          // result.result contains the backend response { success, count, details }
+          // result.result contains the backend response { success, count, failures, truncated }
           const count = result.result?.count ?? 0;
-          toast.success(`Successfully sent to ${count} devices!`);
+          const failures = result.result?.failures ?? 0;
+
+          if (failures > 0) {
+            toast.warning(`Sent to ${count} device${count === 1 ? '' : 's'}, ${failures} failed.`);
+          } else {
+            toast.success(`Successfully sent to ${count} device${count === 1 ? '' : 's'}!`);
+          }
+
+          if (result.result?.truncated) {
+            toast.info('Very large audience: only the first 1,000 devices were included.');
+          }
+
           setNotification({ title: '', body: '', link: '/', type: 'broadcast' });
         }
       } else {

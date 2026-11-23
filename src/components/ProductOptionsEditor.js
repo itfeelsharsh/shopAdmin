@@ -1,33 +1,171 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, Trash2, Sparkles, Sliders } from "react-feather";
+import { Plus, X, Trash2, Zap, Sliders, RefreshCw, Layers } from "react-feather";
+import { toast } from "react-toastify";
 import { Card, Button, Input } from "./ui";
-import { getCategoryOptionPresets, normalizeOptions } from "../utils/productOptions";
+import {
+  mergeOptionGroups,
+  normalizeOptions,
+} from "../utils/productOptions";
+import {
+  emptyCatalog,
+  generateOptionsWithAI,
+  loadOptionCatalog,
+} from "../utils/optionCatalog";
 
 /**
- * Category-aware product options editor.
+ * Dynamic, catalogue-driven product options editor.
  *
- * Used by both Add Product and Edit Product so the storefront and admin always
- * agree on the `product.options` shape:
- *   [{ name, values: [], required }]
+ * No hard-coded category presets. Suggestions come from real products in the
+ * selected category/brand, saved templates, or AI, and every group remains
+ * manually editable.
  */
-const ProductOptionsEditor = ({ options = [], onChange, category = "" }) => {
+const ProductOptionsEditor = ({
+  options = [],
+  onChange,
+  category = "",
+  brand = "",
+  productName = "",
+}) => {
   const [newValues, setNewValues] = useState({});
   const [newGroupName, setNewGroupName] = useState("");
+  const [catalog, setCatalog] = useState(() => emptyCatalog());
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiGroups, setAiGroups] = useState([]);
+  const autoSeededKeyRef = useRef("");
 
   const safeOptions = useMemo(() => (Array.isArray(options) ? options : []), [options]);
-  const suggestions = useMemo(() => getCategoryOptionPresets(category), [category]);
+  const normalizedOptions = useMemo(() => normalizeOptions(safeOptions), [safeOptions]);
+  const catalogKey = `${String(category || "").trim()}|${String(brand || "").trim()}`;
+
+  const hasCategorySuggestions = Boolean(category) && catalog.categoryGroups.length > 0;
+  const hasBrandSuggestions = Boolean(brand) && catalog.brandGroups.length > 0;
+  const hasSuggestions = hasCategorySuggestions || hasBrandSuggestions;
+
+  const refreshCatalog = async (force = false) => {
+    if (!category && !brand) {
+      setCatalog(emptyCatalog());
+      return;
+    }
+
+    setCatalogLoading(true);
+    try {
+      const value = await loadOptionCatalog({ category, brand, force });
+      setCatalog(value);
+    } catch (error) {
+      console.warn("Unable to load option suggestions:", error?.message || error);
+      setCatalog(emptyCatalog());
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    setAiGroups([]);
+    setCatalog(emptyCatalog());
+
+    if (!category && !brand) {
+      setCatalogLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setCatalogLoading(true);
+    loadOptionCatalog({ category, brand })
+      .then((value) => {
+        if (active) setCatalog(value);
+      })
+      .catch((error) => {
+        console.warn("Unable to load option suggestions:", error?.message || error);
+        if (active) setCatalog(emptyCatalog());
+      })
+      .finally(() => {
+        if (active) setCatalogLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [category, brand]);
+
+  // A saved category/brand template automatically seeds a brand-new listing,
+  // so repeat products in the same family stay consistent without hard-coding.
+  useEffect(() => {
+    if (!catalog.loaded || catalog.key !== catalogKey) return;
+    if (autoSeededKeyRef.current === catalogKey) return;
+
+    autoSeededKeyRef.current = catalogKey;
+    if (normalizedOptions.length > 0) return;
+
+    const seed = catalog.categoryTemplateGroups.length > 0
+      ? catalog.categoryTemplateGroups
+      : catalog.brandTemplateGroups;
+
+    if (seed.length > 0) {
+      onChange(normalizeOptions(seed));
+    }
+  }, [catalog, catalogKey, normalizedOptions.length, onChange]);
+
+  const applyGroups = (groups) => {
+    const incoming = normalizeOptions(groups);
+    if (!incoming.length) return;
+    onChange(mergeOptionGroups([...normalizedOptions, ...incoming]));
+  };
+
+  const handleAiSuggest = async () => {
+    if (!String(productName || "").trim()) {
+      toast.error("Enter a product name first so AI knows what it is selling.");
+      return;
+    }
+
+    setAiLoading(true);
+    try {
+      const groups = await generateOptionsWithAI({
+        name: productName,
+        category,
+        brand,
+        existingOptions: normalizedOptions,
+        catalogueOptions: catalog.mergedGroups,
+      });
+
+      if (!groups.length) {
+        toast.info("AI could not find real purchasable variations for this product.");
+        return;
+      }
+
+      setAiGroups(groups);
+      applyGroups(groups);
+      toast.success(`AI added ${groups.length} option group${groups.length > 1 ? "s" : ""}.`);
+    } catch (error) {
+      console.error("AI option generation failed:", error);
+      toast.error(error.message || "AI option generation failed");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const updateGroup = (index, patch) => {
-    const next = safeOptions.map((group, i) => (i === index ? { ...group, ...patch } : group));
-    onChange(next);
+    onChange(safeOptions.map((group, i) => (i === index ? { ...group, ...patch } : group)));
   };
 
   const addGroup = (preset = null) => {
-    const name = (preset?.name || newGroupName || "").trim();
+    const name = String(preset?.name || newGroupName || "").trim();
     if (!name) return;
-    const exists = safeOptions.some((group) => group.name.toLowerCase() === name.toLowerCase());
-    if (exists) return;
+
+    const existing = normalizedOptions.find(
+      (group) => group.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if (existing) {
+      // Reuse the existing group instead of creating a duplicate.
+      applyGroups([{ ...existing, ...(preset || {}), name: existing.name }]);
+      if (!preset) setNewGroupName("");
+      return;
+    }
+
     onChange([
       ...safeOptions,
       {
@@ -49,15 +187,18 @@ const ProductOptionsEditor = ({ options = [], onChange, category = "" }) => {
   };
 
   const addValue = (index) => {
-    const raw = (newValues[index] || "").trim();
+    const raw = String(newValues[index] || "").trim();
     if (!raw) return;
+
     const group = safeOptions[index];
     if (!group) return;
+
     const values = Array.isArray(group.values) ? group.values : [];
     if (values.some((value) => value.toLowerCase() === raw.toLowerCase())) {
       setNewValues((prev) => ({ ...prev, [index]: "" }));
       return;
     }
+
     updateGroup(index, { values: [...values, raw] });
     setNewValues((prev) => ({ ...prev, [index]: "" }));
   };
@@ -68,78 +209,145 @@ const ProductOptionsEditor = ({ options = [], onChange, category = "" }) => {
     updateGroup(index, { values: (group.values || []).filter((entry) => entry !== value) });
   };
 
-  const applySuggestion = (preset) => {
-    const existingIndex = safeOptions.findIndex(
-      (group) => group.name.toLowerCase() === preset.name.toLowerCase()
-    );
-    if (existingIndex >= 0) {
-      updateGroup(existingIndex, {
-        values: preset.values,
-        required: preset.required !== false,
-      });
-    } else {
-      addGroup(preset);
-    }
-  };
-
-  const applyAllSuggestions = () => {
-    const next = [...safeOptions];
-    suggestions.forEach((preset) => {
-      const existingIndex = next.findIndex(
-        (group) => group.name.toLowerCase() === preset.name.toLowerCase()
-      );
-      if (existingIndex >= 0) {
-        next[existingIndex] = { ...next[existingIndex], values: [...preset.values] };
-      } else {
-        next.push({ ...preset, values: [...preset.values] });
-      }
-    });
-    onChange(normalizeOptions(next));
-  };
+  const renderSuggestion = (group, source) => (
+    <button
+      key={`${source}-${group.name}`}
+      type="button"
+      onClick={() => applyGroups([group])}
+      className="group flex w-full items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-sm"
+    >
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5 text-xs font-bold text-gray-800">
+          <Plus className="h-3 w-3 text-violet-500" />
+          {group.name}
+        </span>
+        <span className="mt-0.5 block truncate text-[11px] font-medium text-gray-400">
+          {group.values.slice(0, 6).join(" / ")}
+        </span>
+      </span>
+      <span className="shrink-0 rounded-full bg-gray-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
+        {source}
+      </span>
+    </button>
+  );
 
   return (
     <Card title="Product Options" icon={<Sliders className="w-5 h-5 text-violet-600" />}>
       <div className="space-y-5">
-        <p className="text-sm text-slate-500">
-          Sell every variation from one listing. Customers pick these options on the product page,
-          and the exact choice is carried through the cart, invoice PDF and order emails.
-        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <p className="max-w-xl text-sm text-slate-500">
+            Add real choices customers must make before buying. Suggestions are learned from
+            products already in this category/brand, generated by AI, or added manually.
+            Everything is editable.
+          </p>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={handleAiSuggest}
+              loading={aiLoading}
+              disabled={aiLoading || !String(productName || "").trim()}
+              icon={<Zap className="w-4 h-4" />}
+              className="!bg-violet-600 hover:!bg-violet-700"
+            >
+              {aiLoading ? "Thinking..." : "Suggest with AI"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => refreshCatalog(true)}
+              disabled={catalogLoading || (!category && !brand)}
+              icon={<RefreshCw className={`w-4 h-4 ${catalogLoading ? "animate-spin" : ""}`} />}
+              className="!border-gray-200 !text-gray-600 hover:!bg-gray-50"
+            >
+              Refresh
+            </Button>
+          </div>
+        </div>
 
-        {category && suggestions.length > 0 && (
-          <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
+        {!String(productName || "").trim() && (
+          <p className="text-xs font-medium text-amber-600">
+            Enter a product name in Basic Info to enable AI suggestions.
+          </p>
+        )}
+
+        {/* Catalogue suggestions */}
+        {catalogLoading ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
+              <Layers className="h-4 w-4 animate-pulse text-violet-500" />
+              Reading existing catalogue options…
+            </div>
+          </div>
+        ) : hasSuggestions ? (
+          <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-semibold text-violet-900">
-                <Sparkles className="w-4 h-4" />
-                Suggested for “{category}”
+                <Layers className="h-4 w-4" />
+                Reuse from your catalogue
+                {catalog.productCount > 0 && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-400">
+                    {catalog.productCount} product{catalog.productCount === 1 ? "" : "s"}
+                  </span>
+                )}
               </div>
               <Button
                 type="button"
                 variant="outline"
-                onClick={applyAllSuggestions}
-                className="!py-1.5 !px-3 text-xs border-violet-200 text-violet-700 hover:bg-white"
+                onClick={() => applyGroups(catalog.mergedGroups)}
+                className="!border-violet-200 !px-3 !py-1.5 text-xs !text-violet-700 hover:!bg-white"
               >
                 Apply all
               </Button>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {suggestions.map((preset) => (
-                <button
-                  key={preset.name}
-                  type="button"
-                  onClick={() => applySuggestion(preset)}
-                  className="group inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 transition-all hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-sm"
-                >
-                  <Plus className="w-3 h-3" />
-                  {preset.name}
-                  <span className="max-w-[10rem] truncate text-violet-400 font-medium">
-                    {preset.values.slice(0, 3).join(' / ')}
-                  </span>
-                </button>
-              ))}
-            </div>
+
+            {hasCategorySuggestions && (
+              <div className="mt-3 space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-400">
+                  Used in {category}
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {catalog.categoryGroups.map((group) => renderSuggestion(group, "Category"))}
+                </div>
+              </div>
+            )}
+
+            {hasBrandSuggestions && (
+              <div className="mt-3 space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-400">
+                  Used by {brand}
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {catalog.brandGroups.map((group) => renderSuggestion(group, "Brand"))}
+                </div>
+              </div>
+            )}
+
+            {catalog.categoryGroups.length === 0 && catalog.brandGroups.length === 0 && (
+              <p className="mt-3 text-xs text-violet-500">
+                A saved template is ready. Apply all to use it.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/60 p-4">
+            <p className="text-sm font-semibold text-gray-700">No existing options yet</p>
+            <p className="mt-1 text-xs text-gray-500">
+              This is the first product in this category/brand with options. Ask AI or create
+              your own below — it will be remembered for future products automatically.
+            </p>
           </div>
         )}
 
+        {aiGroups.length > 0 && (
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+            <p className="text-xs font-semibold text-emerald-800">
+              AI suggested {aiGroups.map((group) => group.name).join(", ")}. They were added to
+              your options below.
+            </p>
+          </div>
+        )}
+
+        {/* Existing option groups */}
         <AnimatePresence initial={false}>
           {safeOptions.map((group, index) => (
             <motion.div
@@ -154,7 +362,7 @@ const ProductOptionsEditor = ({ options = [], onChange, category = "" }) => {
                 <div className="flex-1">
                   <Input
                     label={`Option ${index + 1}`}
-                    placeholder="e.g. Frame Size"
+                    placeholder="e.g. Size"
                     value={group.name}
                     onChange={(event) => updateGroup(index, { name: event.target.value })}
                     className="mb-0"
@@ -173,7 +381,7 @@ const ProductOptionsEditor = ({ options = [], onChange, category = "" }) => {
                   type="button"
                   onClick={() => removeGroup(index)}
                   className="mt-1 self-start rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 sm:mt-5"
-                  aria-label={`Remove ${group.name || 'option'}`}
+                  aria-label={`Remove ${group.name || "option"}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -206,7 +414,7 @@ const ProductOptionsEditor = ({ options = [], onChange, category = "" }) => {
 
               <div className="mt-3 flex gap-2">
                 <Input
-                  placeholder={`Add value${group.name ? ` for ${group.name}` : ''}`}
+                  placeholder={`Add value${group.name ? ` for ${group.name}` : ""}`}
                   value={newValues[index] || ""}
                   onChange={(event) =>
                     setNewValues((prev) => ({ ...prev, [index]: event.target.value }))
@@ -234,7 +442,7 @@ const ProductOptionsEditor = ({ options = [], onChange, category = "" }) => {
 
         <div className="flex flex-col gap-2 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-4 sm:flex-row sm:items-center">
           <Input
-            placeholder="New option group, e.g. Colour"
+            placeholder="New option group, e.g. Capacity"
             value={newGroupName}
             onChange={(event) => setNewGroupName(event.target.value)}
             onKeyDown={(event) => {
@@ -257,11 +465,10 @@ const ProductOptionsEditor = ({ options = [], onChange, category = "" }) => {
           </Button>
         </div>
 
-        {safeOptions.length === 0 && (
-          <p className="text-xs text-gray-400">
-            No options yet. This product will be sold as a single version.
-          </p>
-        )}
+        <p className="text-xs text-gray-400">
+          Saving the product remembers these groups for the {category || "selected"} category
+          {brand ? ` and ${brand}` : ""} — future listings can reuse them automatically.
+        </p>
       </div>
     </Card>
   );

@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db, getAppCheckToken } from '../firebase';
 
 /**
@@ -20,39 +20,65 @@ export const sendBroadcastNotification = async (notificationData) => {
   try {
     console.log('📢 NotificationService: Sending broadcast notification:', notificationData);
     
-    // 1. Fetch all users with FCM tokens
+    // 1. Fetch all reachable FCM tokens.
+    // Each source is independent: one denied/broken collection must not block
+    // the whole campaign (for example guest tokens vs registered users).
     const tokens = [];
-    
-    // Fetch from registered users
-    const usersRef = collection(db, 'users');
-    const qUsers = query(usersRef, where('notificationsEnabled', '==', true));
-    const usersSnapshot = await getDocs(qUsers);
-    
-    usersSnapshot.forEach((doc) => {
-      const userData = doc.data();
-      if (userData.fcmTokens && Array.isArray(userData.fcmTokens)) {
-        tokens.push(...userData.fcmTokens);
-      }
-    });
+    const sourceFailures = [];
 
-    // Fetch from anonymous/guest tokens
-    const guestTokensRef = collection(db, 'fcmTokens');
-    const guestSnapshot = await getDocs(guestTokensRef);
-    
-    guestSnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.token) {
-        tokens.push(data.token);
-      }
-    });
+    const [usersResult, guestsResult] = await Promise.allSettled([
+      (async () => {
+        const usersSnapshot = await getDocs(
+          query(collection(db, 'users'), where('notificationsEnabled', '==', true))
+        );
+        const collected = [];
+        usersSnapshot.forEach((userDoc) => {
+          const userData = userDoc.data();
+          if (Array.isArray(userData.fcmTokens)) {
+            collected.push(...userData.fcmTokens.filter(Boolean));
+          }
+        });
+        return collected;
+      })(),
+      (async () => {
+        const guestSnapshot = await getDocs(collection(db, 'fcmTokens'));
+        const collected = [];
+        guestSnapshot.forEach((guestDoc) => {
+          const data = guestDoc.data();
+          if (data.notificationsEnabled !== false && data.token) {
+            collected.push(data.token);
+          }
+        });
+        return collected;
+      })(),
+    ]);
+
+    if (usersResult.status === 'fulfilled') {
+      tokens.push(...usersResult.value);
+    } else {
+      sourceFailures.push(`registered users (${usersResult.reason?.code || usersResult.reason?.message || 'unknown'})`);
+      console.warn('📢 NotificationService: Could not read registered users:', usersResult.reason);
+    }
+
+    if (guestsResult.status === 'fulfilled') {
+      tokens.push(...guestsResult.value);
+    } else {
+      sourceFailures.push(`guest devices (${guestsResult.reason?.code || guestsResult.reason?.message || 'unknown'})`);
+      console.warn('📢 NotificationService: Could not read guest tokens:', guestsResult.reason);
+    }
 
     if (tokens.length === 0) {
+      if (sourceFailures.length === 2) {
+        throw new Error(
+          `Unable to read notification recipients. Firestore denied both token sources: ${sourceFailures.join(', ')}. Deploy the latest Firestore rules.`
+        );
+      }
       console.log('📢 NotificationService: No tokens found to notify');
       return { success: true, message: 'No users to notify', result: { count: 0 } };
     }
 
     // Remove duplicates
-    const uniqueTokens = [...new Set(tokens)];
+    const uniqueTokens = [...new Set(tokens.filter(Boolean))];
     console.log(`📢 NotificationService: Sending to ${uniqueTokens.length} unique tokens`);
 
     // 2. Call the backend API to send the messages
@@ -99,14 +125,13 @@ export const sendUserNotification = async (userId, notificationData) => {
     console.log(`📢 NotificationService: Sending notification to user ${userId}:`, notificationData);
     
     // 1. Fetch user document
-    const userRef = collection(db, 'users');
-    const userSnapshot = await getDocs(query(userRef, where('uid', '==', userId)));
-    
-    if (userSnapshot.empty) {
+    const userSnapshot = await getDoc(doc(db, 'users', userId));
+
+    if (!userSnapshot.exists()) {
       throw new Error('User not found');
     }
 
-    const userData = userSnapshot.docs[0].data();
+    const userData = userSnapshot.data();
     if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
       console.log('📢 NotificationService: User has no registered tokens');
       return { success: true, message: 'User has no tokens' };

@@ -94,7 +94,7 @@ Generate reasonable pricing suggestions in INR (₹):
 Generate a random stock quantity between 1 and 999.
 Generate a realistic country of origin (e.g., India, Japan, Germany, USA, etc.).
 Generate some additional notes/information suitable for this product.
-Generate 0-3 category-specific PURCHASABLE OPTION GROUPS in "options". These are real choices the customer must pick before buying, based on how this exact product is sold (for example a bicycle: Frame Size, Wheel Size, Colour; a notebook: Size, Ruling; a pen: Point Size, Ink Colour, Pack Size). Each group must have a clear short name and 2-6 concrete values. Use an empty array when the product has no real variations. Do NOT put marketing copy in option values.
+Generate 0-4 PURCHASABLE OPTION GROUPS in "options". These must be real choices the customer has to make before buying this exact product (for example size, colour, capacity, pack count, material — only where they genuinely apply). Use the product name and its category/brand to decide. Each group must have a clear short name and 2-8 concrete values. Use an empty array when the product has no real variations. Do NOT put marketing copy, price or stock in option values.
 Randomly determine if the product has a warranty and/or guarantee (do not make them identical or always active; make it realistic for the type of product, e.g., some items have neither, some have 6-month warranty, some have a 30-day money-back guarantee, etc.).
 
 Do not generate or modify the product name. In your response, the name field MUST be exactly the input product name: "${name}".

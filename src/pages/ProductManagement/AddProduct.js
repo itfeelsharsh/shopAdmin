@@ -11,7 +11,8 @@ import { Button, Card, Input, Alert, Badge } from "../../components/ui";
 import { toast } from "react-toastify";
 import { processFileItem, uploadToCDN } from "../../utils/uploadHelper";
 import ProductOptionsEditor from "../../components/ProductOptionsEditor";
-import { getCategoryOptionPresets, normalizeOptions } from "../../utils/productOptions";
+import { normalizeOptions } from "../../utils/productOptions";
+import { rememberProductContext } from "../../utils/optionCatalog";
 
 const productTypes = [
   'Notebooks and Journals',
@@ -24,20 +25,6 @@ const productTypes = [
   'Cards and Envelopes',
   'Writing Accessories',
   'Gift Wrap and Packaging',
-  'Bicycles',
-  'Bike Accessories',
-  'Fitness Equipment',
-  'Electronics',
-  'Audio',
-  'Apparel and Footwear',
-  'Home and Kitchen',
-  'Beauty and Personal Care',
-  'Toys and Games',
-  'Musical Instruments',
-  'Bags and Luggage',
-  'Jewellery and Watches',
-  'Health and Wellness',
-  'Automotive',
 ];
 
 const brands = [
@@ -177,26 +164,8 @@ const AddProduct = () => {
     }
   };
 
-  /**
-   * Category changes automatically seed category-specific options the first
-   * time, so a bicycle listing immediately offers frame/wheel sizes.
-   * Custom options the admin has already edited are never overwritten.
-   */
   const handleCategoryChange = (value) => {
-    setNewProduct((prev) => {
-      const previousPresets = normalizeOptions(getCategoryOptionPresets(prev.type));
-      const nextPresets = normalizeOptions(getCategoryOptionPresets(value));
-      const currentOptions = normalizeOptions(prev.options);
-      const optionsUntouched =
-        currentOptions.length === 0 ||
-        JSON.stringify(currentOptions) === JSON.stringify(previousPresets);
-
-      return {
-        ...prev,
-        type: value,
-        options: optionsUntouched && nextPresets.length > 0 ? nextPresets : prev.options,
-      };
-    });
+    setNewProduct((prev) => ({ ...prev, type: value }));
   };
 
   const handleCreateCategory = async () => {
@@ -496,9 +465,7 @@ const AddProduct = () => {
           specifications: Array.isArray(p.specifications) ? p.specifications : prev.specifications,
           options: Array.isArray(p.options) && p.options.length > 0
             ? normalizeOptions(p.options)
-            : (prev.options && prev.options.length > 0
-                ? prev.options
-                : normalizeOptions(getCategoryOptionPresets(matchedCategory || prev.type))),
+            : prev.options,
           warranty: p.warranty ? {
             available: !!p.warranty.available,
             period: p.warranty.period || "",
@@ -627,6 +594,18 @@ const AddProduct = () => {
 
       const productRef = doc(db, "products", formattedSlug);
       await setDoc(productRef, productToSave);
+
+      // Learn this product's options for the category/brand so future listings
+      // can reuse them automatically. Failures never block the product save.
+      try {
+        await rememberProductContext({
+          category: productToSave.type,
+          brand: productToSave.brand,
+          options: productToSave.options,
+        });
+      } catch (contextError) {
+        console.warn("Could not update option catalogue:", contextError);
+      }
 
       toast.success("Product added successfully!");
       setTimeout(() => {
@@ -1483,6 +1462,8 @@ const AddProduct = () => {
           <ProductOptionsEditor
             options={newProduct.options}
             category={newProduct.type}
+            brand={newProduct.brand}
+            productName={newProduct.name}
             onChange={(options) => setNewProduct((prev) => ({ ...prev, options }))}
           />
 

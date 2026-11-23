@@ -12,7 +12,8 @@ import { toast } from "react-toastify";
 import { sendBroadcastNotification } from "../../utils/notificationService";
 import { processFileItem, uploadToCDN } from "../../utils/uploadHelper";
 import ProductOptionsEditor from "../../components/ProductOptionsEditor";
-import { getCategoryOptionPresets, normalizeOptions } from "../../utils/productOptions";
+import { normalizeOptions } from "../../utils/productOptions";
+import { rememberProductContext } from "../../utils/optionCatalog";
 
 const productTypes = [
   'Notebooks and Journals',
@@ -25,20 +26,6 @@ const productTypes = [
   'Cards and Envelopes',
   'Writing Accessories',
   'Gift Wrap and Packaging',
-  'Bicycles',
-  'Bike Accessories',
-  'Fitness Equipment',
-  'Electronics',
-  'Audio',
-  'Apparel and Footwear',
-  'Home and Kitchen',
-  'Beauty and Personal Care',
-  'Toys and Games',
-  'Musical Instruments',
-  'Bags and Luggage',
-  'Jewellery and Watches',
-  'Health and Wellness',
-  'Automotive',
 ];
 
 const brands = [
@@ -179,21 +166,7 @@ const EditProduct = () => {
   };
 
   const handleCategoryChange = (value) => {
-    setProduct((prev) => {
-      if (!prev) return prev;
-      const previousPresets = normalizeOptions(getCategoryOptionPresets(prev.type));
-      const nextPresets = normalizeOptions(getCategoryOptionPresets(value));
-      const currentOptions = normalizeOptions(prev.options);
-      const optionsUntouched =
-        currentOptions.length === 0 ||
-        JSON.stringify(currentOptions) === JSON.stringify(previousPresets);
-
-      return {
-        ...prev,
-        type: value,
-        options: optionsUntouched && nextPresets.length > 0 ? nextPresets : prev.options,
-      };
-    });
+    setProduct((prev) => (prev ? { ...prev, type: value } : prev));
   };
 
   const handleDrag = (e) => {
@@ -417,7 +390,18 @@ const EditProduct = () => {
       };
 
       await updateDoc(productRef, updateData);
-      
+
+      // Learn option usage for this category/brand.
+      try {
+        await rememberProductContext({
+          category: updateData.type,
+          brand: updateData.brand,
+          options: updateData.options,
+        });
+      } catch (contextError) {
+        console.warn("Could not update option catalogue:", contextError);
+      }
+
       // Handle notifications
       if (notifyUsers && (priceChanged || stockAdded)) {
         let title = "";
@@ -1103,6 +1087,8 @@ const EditProduct = () => {
           <ProductOptionsEditor
             options={product.options}
             category={product.type}
+            brand={product.brand}
+            productName={product.name}
             onChange={(options) => setProduct((prev) => ({ ...prev, options }))}
           />
 
