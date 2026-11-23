@@ -1353,7 +1353,7 @@ function Orders() {
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         {filteredOrders.length === 0 ? (
           // Empty state with helpful messaging
-          <div className="p-16 text-center">
+          <div className="p-10 text-center sm:p-16">
             <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
               <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

@@ -313,8 +313,12 @@ const BannerManager = () => {
                   </a>
                 </div>
               </div>
+              <p className="mt-2 text-xs font-medium text-gray-500">
+                Recommended size: <span className="font-semibold text-gray-700">1920 × 720 px</span> (8:3).
+                Keep the subject in the centre 70% for clean mobile cropping.
+              </p>
             </div>
-            
+
             <div className="flex items-center">
               <label className="relative inline-flex items-center cursor-pointer mr-2">
                 <input 
