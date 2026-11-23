@@ -20,7 +20,8 @@ const formatDelta = (amount) => {
   return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(number);
 };
 
-const getGroupValues = (group) => normalizeOptions([group])[0]?.values || [];
+const getGroupValues = (group) =>
+  normalizeOptions([{ name: "__option__", values: group?.values || [] }])[0]?.values || [];
 
 /**
  * Dynamic, catalogue-driven product options editor.
