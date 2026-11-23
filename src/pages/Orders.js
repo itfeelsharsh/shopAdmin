@@ -945,7 +945,7 @@ function Orders() {
    * Format price as currency (from original code)
    */
   const formatPrice = (price) => {
-    return `₹${Number(price).toFixed(2)}`;
+    return formatCurrency(price, 0);
   };
 
 
@@ -1074,49 +1074,53 @@ function Orders() {
     );
   }
 
+  // Shared desktop grid so the header and rows stay perfectly aligned.
+  const desktopGridColumns = bulkOperationMode
+    ? '2.25rem minmax(150px,1.3fr) minmax(135px,1.05fr) minmax(100px,.75fr) minmax(85px,.6fr) minmax(80px,.55fr) minmax(120px,.85fr) minmax(285px,1.9fr)'
+    : 'minmax(150px,1.3fr) minmax(135px,1.05fr) minmax(100px,.75fr) minmax(85px,.6fr) minmax(80px,.55fr) minmax(120px,.85fr) minmax(285px,1.9fr)';
+  const desktopGridStyle = { gridTemplateColumns: desktopGridColumns, columnGap: '1rem' };
+
   // Main component render
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl pb-2">
       {/* Toast notification container */}
 
       
       {/* Header Section with Title and Action Buttons */}
       <div className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">Order Management</h1>
-            <p className="text-gray-600 text-lg mb-4">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0">
+            <h1 className="mb-1 text-2xl font-bold tracking-tight text-gray-900 sm:mb-2 sm:text-3xl">Order Management</h1>
+            <p className="mb-3 text-sm text-gray-500 sm:mb-4 sm:text-base">
               Manage and track all customer orders
             </p>
-            <div className="flex items-center gap-6 text-sm">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs sm:text-sm">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                <span className="text-gray-600">Total Orders:</span>
-                <span className="font-semibold text-gray-900">{formatIndianNumber(orders.length)}</span>
+                <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+                <span className="text-gray-500">Total Orders:</span>
+                <span className="font-semibold text-gray-900">{formatIndianNumber(orders.length, 0)}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                <span className="text-gray-600">Showing:</span>
-                <span className="font-semibold text-gray-900">{formatIndianNumber(filteredOrders.length)}</span>
+                <span className="h-2 w-2 rounded-full bg-green-500"></span>
+                <span className="text-gray-500">Showing:</span>
+                <span className="font-semibold text-gray-900">{formatIndianNumber(filteredOrders.length, 0)}</span>
               </div>
               {selectedOrderIds.size > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                  <span className="text-gray-600">Selected:</span>
+                  <span className="h-2 w-2 rounded-full bg-orange-500"></span>
+                  <span className="text-gray-500">Selected:</span>
                   <span className="font-semibold text-orange-600">{selectedOrderIds.size}</span>
                 </div>
               )}
             </div>
           </div>
-          
-          <div className="flex flex-wrap gap-3">
+
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
             {/* Refresh button */}
             <button
               onClick={fetchOrders}
               disabled={loading}
-              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
-                       disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200
-                       flex items-center gap-2 font-medium shadow-sm"
+              className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? (
                 <>
@@ -1137,9 +1141,7 @@ function Orders() {
             <button
               onClick={generateAnalytics}
               disabled={analyticsLoading}
-              className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 
-                       disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200
-                       flex items-center gap-2 font-medium shadow-sm"
+              className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {analyticsLoading ? (
                 <>
@@ -1162,10 +1164,10 @@ function Orders() {
                 setBulkOperationMode(!bulkOperationMode);
                 setSelectedOrderIds(new Set());
               }}
-              className={`px-5 py-2.5 rounded-lg transition-all duration-200 flex items-center gap-2 font-medium shadow-sm ${
-                bulkOperationMode 
-                  ? 'bg-orange-600 text-white hover:bg-orange-700' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              className={`col-span-2 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm transition-all duration-200 sm:col-span-1 ${
+                bulkOperationMode
+                  ? 'bg-orange-600 text-white hover:bg-orange-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1178,9 +1180,9 @@ function Orders() {
       </div>
 
       {/* Filters Section */}
-      <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-800">Filters & Search</h3>
+      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:mb-8 sm:p-6">
+        <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6">
+          <h3 className="text-base font-semibold text-gray-800 sm:text-lg">Filters & Search</h3>
           <button
             onClick={() => {
               setFilters({
@@ -1192,20 +1194,20 @@ function Orders() {
                 carrier: 'all'
               });
             }}
-            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+            className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 sm:text-sm"
           >
             Clear All Filters
           </button>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-6">
           {/* Status filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
             <select
               value={filters.status}
               onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="w-full rounded-xl border border-gray-300 p-2.5 text-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:p-3"
             >
               <option value="all">All Statuses</option>
               {Object.entries(ORDER_STATUS_CONFIG).map(([status, config]) => (
@@ -1222,7 +1224,7 @@ function Orders() {
             <select
               value={filters.priority}
               onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="w-full rounded-xl border border-gray-300 p-2.5 text-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:p-3"
             >
               <option value="all">All Priorities</option>
               {Object.entries(PRIORITY_CONFIG).map(([priority, config]) => (
@@ -1242,9 +1244,9 @@ function Orders() {
                 placeholder="Order ID, customer, product..."
                 value={filters.searchTerm}
                 onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
-                className="w-full p-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full rounded-xl border border-gray-300 p-2.5 pl-10 text-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:p-3 sm:pl-10"
               />
-              <svg className="absolute left-3 top-3.5 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="absolute left-3 top-3 h-4 w-4 text-gray-400 sm:top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
@@ -1260,7 +1262,7 @@ function Orders() {
                 ...prev, 
                 dateRange: { ...prev.dateRange, startDate: e.target.value }
               }))}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="w-full rounded-xl border border-gray-300 p-2.5 text-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:p-3"
             />
           </div>
           
@@ -1274,7 +1276,7 @@ function Orders() {
                 ...prev, 
                 dateRange: { ...prev.dateRange, endDate: e.target.value }
               }))}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              className="w-full rounded-xl border border-gray-300 p-2.5 text-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:p-3"
             />
           </div>
           
@@ -1287,9 +1289,9 @@ function Orders() {
                 placeholder="0"
                 value={filters.minAmount}
                 onChange={(e) => setFilters(prev => ({ ...prev, minAmount: e.target.value }))}
-                className="w-full p-3 pl-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full rounded-xl border border-gray-300 p-2.5 pl-8 text-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 sm:p-3 sm:pl-8"
               />
-              <span className="absolute left-3 top-3.5 text-gray-400">₹</span>
+              <span className="absolute left-3 top-3 text-gray-400 sm:top-3.5">₹</span>
             </div>
           </div>
         </div>
@@ -1297,7 +1299,7 @@ function Orders() {
 
       {/* Bulk Operations Panel */}
       {bulkOperationMode && (
-        <div className="mb-8 bg-orange-50 rounded-xl border border-orange-200 p-6">
+        <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:mb-8 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <div>
               <h3 className="text-lg font-semibold text-orange-800 mb-1">
@@ -1310,13 +1312,13 @@ function Orders() {
               )}
             </div>
             {selectedOrderIds.size > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
                 <button
                   onClick={() => handleBulkOperation('update_status', { 
                     status: ORDER_STATUSES.APPROVED,
                     note: 'Bulk approval by admin'
                   })}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors font-medium"
+                  className="w-full rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50 sm:w-auto"
                   disabled={processingAction}
                 >
                   Bulk Approve
@@ -1325,14 +1327,14 @@ function Orders() {
                   onClick={() => handleBulkOperation('update_priority', { 
                     priority: ORDER_PRIORITIES.HIGH 
                   })}
-                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm hover:bg-yellow-700 transition-colors font-medium"
+                  className="w-full rounded-xl bg-yellow-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-yellow-700 disabled:opacity-50 sm:w-auto"
                   disabled={processingAction}
                 >
                   Set High Priority
                 </button>
                 <button
                   onClick={() => setSelectedOrderIds(new Set())}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors font-medium"
+                  className="w-full rounded-xl bg-gray-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-700 sm:w-auto"
                 >
                   Clear Selection
                 </button>
@@ -1348,7 +1350,7 @@ function Orders() {
       )}
 
       {/* Orders Table Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         {filteredOrders.length === 0 ? (
           // Empty state with helpful messaging
           <div className="p-16 text-center">
@@ -1382,10 +1384,11 @@ function Orders() {
         ) : (
           <>
             {/* Table Header */}
-            <div className="hidden md:block bg-gray-50 border-b border-gray-200 px-6 py-4">
-              <div className={`grid gap-6 items-center font-semibold text-gray-700 text-sm uppercase tracking-wide ${
-                bulkOperationMode ? 'grid-cols-8' : 'grid-cols-7'
-              }`}>
+            <div className="hidden border-b border-gray-200 bg-gray-50/80 px-4 py-3.5 xl:block">
+              <div
+                className="grid items-center text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                style={desktopGridStyle}
+              >
                 {bulkOperationMode && (
                   <div className="flex items-center">
                     <input
@@ -1403,7 +1406,7 @@ function Orders() {
                 <div>Status</div>
                 <div>Priority</div>
                 <div>Date</div>
-                <div>Actions</div>
+                <div className="text-right">Actions</div>
               </div>
             </div>
             
@@ -1423,278 +1426,297 @@ function Orders() {
                 return (
                   <div 
                     key={order.id} 
-                    className={`px-6 py-5 hover:bg-gray-50 transition-all duration-150 border-b border-gray-100 ${
-                      isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                    className={`px-4 py-4 transition-colors duration-150 hover:bg-gray-50/70 sm:px-5 sm:py-5 xl:px-4 ${
+                      isSelected ? 'border-l-4 border-blue-500 bg-blue-50' : ''
                     }`}
                   >
                     {/* Desktop Layout (Hidden on Mobile) */}
-                    <div className={`hidden md:grid gap-6 items-center ${
-                      bulkOperationMode ? 'grid-cols-8' : 'grid-cols-7'
-                    }`}>
-                      {/* Bulk selection checkbox */}
+                    <div
+                      className="hidden items-center xl:grid"
+                      style={desktopGridStyle}
+                    >
                       {bulkOperationMode && (
-                        <div>
+                        <div className="flex items-center justify-center">
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => toggleOrderSelection(order.id, isSelected)}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           />
                         </div>
                       )}
-                      
+
                       {/* Order Details Column */}
-                      <div>
-                        <div className="font-semibold text-gray-900 mb-1">
+                      <div className="min-w-0">
+                        <div className="break-words text-[13px] font-semibold leading-snug text-gray-900" title={`#${order.orderId || order.id}`}>
                           #{order.orderId || order.id}
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">
+                        <div className="mt-0.5 text-xs text-gray-500">
                           {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}
                         </div>
                         {order.tracking?.code && (
-                          <div className="text-xs text-blue-600 font-mono bg-blue-50 px-2 py-1 rounded">
+                          <div className="mt-1.5 inline-block max-w-full truncate rounded-md bg-blue-50 px-2 py-0.5 font-mono text-[10px] text-blue-600">
                             {order.tracking.code}
                           </div>
                         )}
                       </div>
-                      
+
                       {/* Customer Information Column */}
-                      <div>
-                        <div className="font-medium text-gray-900 truncate mb-1">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-gray-900" title={order.userName || 'Unknown Customer'}>
                           {order.userName || 'Unknown Customer'}
                         </div>
-                        <div className="text-sm text-gray-600 truncate">
+                        <div className="truncate text-xs text-gray-500" title={order.userEmail}>
                           {order.userEmail}
                         </div>
                       </div>
-                      
+
                       {/* Amount Column */}
                       <div>
-                        <div className="font-semibold text-gray-900 text-lg">
+                        <div className="whitespace-nowrap text-base font-bold text-gray-900">
                           {formatPrice(getOrderTotal(order))}
                         </div>
                       </div>
-                      
+
                       {/* Status Column */}
-                      <div>
-                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusConfig.color}`}>
+                      <div className="min-w-0">
+                        <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusConfig.color}`}>
                           {statusConfig.label}
                         </span>
                         {order.orderAge && order.orderAge > 7 && (
-                          <div className="text-xs text-red-600 mt-2 flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-red-600">
+                            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                             </svg>
-                            {order.orderAge} days old
+                            {order.orderAge}d old
                           </div>
                         )}
                       </div>
-                      
+
                       {/* Priority Column */}
                       <div>
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${priorityConfig.color}`}>
+                        <span className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold ${priorityConfig.color}`}>
                           {priorityConfig.label}
                         </span>
                       </div>
-                      
+
                       {/* Date Column */}
-                      <div>
-                        <div className="text-sm text-gray-900">
+                      <div className="min-w-0">
+                        <div className="text-xs leading-snug text-gray-600">
                           {formatDate(order.orderDate || order.createdAt)}
                         </div>
                       </div>
-                      
+
                       {/* Actions Column */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
                         <button
                           onClick={() => openOrderModal(order, 'view')}
-                          className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200 transition-colors"
+                          className="whitespace-nowrap rounded-lg bg-gray-100 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-200"
                           title="View order details"
                         >
-                          View Details
+                          Details
                         </button>
-                        
+
                         {order.status === ORDER_STATUSES.PLACED && (
                           <>
                             <button
                               onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.APPROVED)}
-                              className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
+                              className="whitespace-nowrap rounded-lg bg-green-600 px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                               disabled={processingAction}
                               title="Approve order"
                             >
-                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.APPROVED ? 'Approving...' : 'Approve'}
+                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.APPROVED ? 'Approving…' : 'Approve'}
                             </button>
                             <button
                               onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.DECLINED, {
                                 reason: 'Declined by admin from order details'
                               })}
-                              className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 transition-colors"
+                              className="whitespace-nowrap rounded-lg bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                               disabled={processingAction}
                               title="Decline order"
                             >
-                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DECLINED ? 'Declining...' : 'Decline'}
+                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DECLINED ? 'Declining…' : 'Decline'}
                             </button>
                           </>
                         )}
-                        
+
                         {order.status === ORDER_STATUSES.APPROVED && (
                           <button
                             onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.PACKED)}
-                            className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-colors"
+                            className="whitespace-nowrap rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={processingAction}
                             title="Mark as packed"
                           >
-                            {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.PACKED ? 'Packing...' : 'Mark Packed'}
+                            {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.PACKED ? 'Packing…' : 'Mark Packed'}
                           </button>
                         )}
-                        
+
                         {order.status === ORDER_STATUSES.PACKED && (
                           <button
                             onClick={() => openOrderModal(order, 'shipping')}
-                            className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 transition-colors"
+                            className="whitespace-nowrap rounded-lg bg-purple-600 px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={processingAction}
                             title="Add shipping information"
                           >
-                            {processingOrderState.id === order.id && processingOrderState.status === 'Shipped' ? 'Shipping...' : 'Add Shipping'}
+                            {processingOrderState.id === order.id && processingOrderState.status === 'Shipped' ? 'Shipping…' : 'Add Shipping'}
                           </button>
                         )}
-                        
+
                         {order.status === ORDER_STATUSES.SHIPPED && (
                           <button
                             onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.DELIVERED)}
-                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
+                            className="whitespace-nowrap rounded-lg bg-green-600 px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={processingAction}
                             title="Mark as delivered"
                           >
-                            {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? 'Delivering...' : 'Mark Delivered'}
+                            {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? 'Delivering…' : 'Mark Delivered'}
                           </button>
                         )}
+
                         <button
                           onClick={() => handleNukeOrder(order.id)}
-                          className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-semibold transition-colors"
+                          className="whitespace-nowrap rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={processingAction}
                           title="Nuke order (permanently delete)"
                         >
-                          {processingOrderState.id === order.id && processingOrderState.status === 'nuke' ? 'Nuking...' : 'Nuke'}
+                          {processingOrderState.id === order.id && processingOrderState.status === 'nuke' ? 'Nuking…' : 'Nuke'}
                         </button>
                       </div>
+
                     </div>
 
-                    {/* Mobile Layout (Visible on Mobile Only) */}
-                    <div className="md:hidden flex flex-col space-y-4">
-                      {/* Top Row: Order ID, Status, Selection */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                    {/* Mobile / tablet card layout */}
+                    <div className="flex flex-col gap-4 xl:hidden">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-2.5">
                           {bulkOperationMode && (
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleOrderSelection(order.id, isSelected)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                              className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                             />
                           )}
-                          <span className="font-bold text-slate-900 text-base">#{order.orderId || order.id}</span>
-                        </div>
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${statusConfig.color}`}>
-                          {statusConfig.label}
-                        </span>
-                      </div>
-
-                      {/* Middle Area: Customer, Items Count, Tracking, Date & Total */}
-                      <div className="grid grid-cols-2 gap-4 text-sm border-t border-b border-slate-100 py-3">
-                        <div className="space-y-1">
-                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Customer</p>
-                          <p className="font-semibold text-slate-800 truncate">{order.userName || 'Unknown Customer'}</p>
-                          <p className="text-xs text-slate-500 truncate">{order.userEmail}</p>
-                          {order.tracking?.code && (
-                            <div className="mt-1.5 text-[10px] text-blue-600 font-mono bg-blue-50 px-2 py-0.5 rounded inline-block max-w-full truncate">
-                              {order.tracking.code}
+                          <div className="min-w-0">
+                            <div className="break-all text-sm font-bold text-slate-900">
+                              #{order.orderId || order.id}
                             </div>
-                          )}
+                            <div className="mt-1 text-[11px] font-medium text-slate-400">
+                              {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-right space-y-1">
-                          <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">Total Amount</p>
-                          <p className="font-bold text-slate-900 text-lg">{formatPrice(getOrderTotal(order))}</p>
-                          <p className="text-xs text-slate-500">{order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}</p>
-                        </div>
-                      </div>
-
-                      {/* Bottom row: Priority, Date, Actions */}
-                      <div className="flex items-center justify-between pt-1">
-                        <div className="flex flex-col gap-1">
-                          <span className={`inline-flex items-center self-start px-2 py-0.5 rounded text-[11px] font-bold tracking-wide uppercase ${priorityConfig.color}`}>
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusConfig.color}`}>
+                            {statusConfig.label}
+                          </span>
+                          <span className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-semibold ${priorityConfig.color}`}>
                             {priorityConfig.label}
                           </span>
-                          <span className="text-[11px] text-slate-400 font-medium">
-                            {formatDate(order.orderDate || order.createdAt)}
-                          </span>
                         </div>
+                      </div>
 
-                        {/* Actions block */}
-                        <div className="flex flex-wrap gap-1.5 justify-end">
+                      <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Customer</p>
+                          <p className="mt-0.5 truncate text-sm font-semibold text-slate-800">
+                            {order.userName || 'Unknown Customer'}
+                          </p>
+                          <p className="truncate text-[11px] text-slate-500" title={order.userEmail}>
+                            {order.userEmail}
+                          </p>
+                        </div>
+                        <div className="min-w-0 text-right">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total</p>
+                          <p className="mt-0.5 whitespace-nowrap text-base font-bold text-slate-900">
+                            {formatPrice(getOrderTotal(order))}
+                          </p>
+                          <p className="text-[10px] leading-snug text-slate-500">
+                            {formatDate(order.orderDate || order.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {order.tracking?.code && (
+                        <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-500">Tracking</span>
+                          <span className="truncate font-mono text-[11px] font-semibold text-blue-700">{order.tracking.code}</span>
+                        </div>
+                      )}
+
+                      {order.orderAge && order.orderAge > 7 && (
+                        <div className="flex items-center gap-1 text-[10px] font-semibold text-red-600">
+                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                          {order.orderAge} days old — needs attention
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => openOrderModal(order, 'view')}
+                          className="min-w-[7rem] flex-1 rounded-xl bg-slate-100 px-3 py-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200"
+                        >
+                          View Details
+                        </button>
+
+                        {order.status === ORDER_STATUSES.PLACED && (
+                          <>
+                            <button
+                              onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.APPROVED)}
+                              className="min-w-[7rem] flex-1 rounded-xl bg-green-600 px-3 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              disabled={processingAction}
+                            >
+                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.APPROVED ? 'Approving…' : 'Approve'}
+                            </button>
+                            <button
+                              onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.DECLINED, { reason: 'Declined by admin' })}
+                              className="min-w-[7rem] flex-1 rounded-xl bg-red-600 px-3 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              disabled={processingAction}
+                            >
+                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DECLINED ? 'Declining…' : 'Decline'}
+                            </button>
+                          </>
+                        )}
+
+                        {order.status === ORDER_STATUSES.APPROVED && (
                           <button
-                            onClick={() => openOrderModal(order, 'view')}
-                            className="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200"
-                          >
-                            Details
-                          </button>
-                          
-                          {order.status === ORDER_STATUSES.PLACED && (
-                            <>
-                              <button
-                                onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.APPROVED)}
-                                className="px-2.5 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"
-                                disabled={processingAction}
-                              >
-                                {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.APPROVED ? '...' : 'Approve'}
-                              </button>
-                              <button
-                                onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.DECLINED, { reason: 'Declined by admin' })}
-                                className="px-2.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700"
-                                disabled={processingAction}
-                              >
-                                {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DECLINED ? '...' : 'Decline'}
-                              </button>
-                            </>
-                          )}
-
-                          {order.status === ORDER_STATUSES.APPROVED && (
-                            <button
-                              onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.PACKED)}
-                              className="px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700"
-                              disabled={processingAction}
-                            >
-                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.PACKED ? '...' : 'Pack'}
-                            </button>
-                          )}
-
-                          {order.status === ORDER_STATUSES.PACKED && (
-                            <button
-                              onClick={() => openOrderModal(order, 'shipping')}
-                              className="px-2.5 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700"
-                              disabled={processingAction}
-                            >
-                              Ship
-                            </button>
-                          )}
-
-                          {order.status === ORDER_STATUSES.SHIPPED && (
-                            <button
-                              onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.DELIVERED)}
-                              className="px-2.5 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"
-                              disabled={processingAction}
-                            >
-                              {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? '...' : 'Deliver'}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleNukeOrder(order.id)}
-                            className="px-2.5 py-1.5 bg-red-700 text-white rounded-lg text-xs font-semibold hover:bg-red-800"
+                            onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.PACKED)}
+                            className="min-w-[7rem] flex-1 rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={processingAction}
                           >
-                            {processingOrderState.id === order.id && processingOrderState.status === 'nuke' ? '...' : 'Nuke'}
+                            {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.PACKED ? 'Packing…' : 'Mark Packed'}
                           </button>
-                        </div>
+                        )}
+
+                        {order.status === ORDER_STATUSES.PACKED && (
+                          <button
+                            onClick={() => openOrderModal(order, 'shipping')}
+                            className="min-w-[7rem] flex-1 rounded-xl bg-purple-600 px-3 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={processingAction}
+                          >
+                            Add Shipping
+                          </button>
+                        )}
+
+                        {order.status === ORDER_STATUSES.SHIPPED && (
+                          <button
+                            onClick={() => updateOrderStatus(order.id, ORDER_STATUSES.DELIVERED)}
+                            className="min-w-[7rem] flex-1 rounded-xl bg-green-600 px-3 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={processingAction}
+                          >
+                            {processingOrderState.id === order.id && processingOrderState.status === ORDER_STATUSES.DELIVERED ? 'Delivering…' : 'Mark Delivered'}
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleNukeOrder(order.id)}
+                          className="w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={processingAction}
+                        >
+                          {processingOrderState.id === order.id && processingOrderState.status === 'nuke' ? 'Nuking…' : 'Nuke order'}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1706,7 +1728,7 @@ function Orders() {
       </div>
 
       {/* Pagination & Results Summary */}
-      <div className="mt-6 px-6 py-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 sm:mt-6 sm:px-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-sm text-gray-600">
             Showing <span className="font-semibold text-gray-900">{orders.length}</span> orders
@@ -1717,7 +1739,7 @@ function Orders() {
               <button
                 onClick={handleLoadMore}
                 disabled={loading}
-                className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-6 py-2.5 font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:opacity-50 sm:w-auto"
               >
                 {loading ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent"></div>
@@ -1739,11 +1761,11 @@ function Orders() {
 
       {/* Order Details/Shipping Modal */}
       {isModalOpen && selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+          <div className="flex h-[100dvh] w-full max-w-6xl flex-col overflow-y-auto rounded-none bg-white shadow-xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white rounded-t-lg">
-              <h3 className="text-xl font-bold text-gray-900">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3.5 sm:px-6 sm:py-4">
+              <h3 className="truncate text-base font-bold text-gray-900 sm:text-xl">
                 {modalMode === 'shipping' ? (
                   'Add Shipping Information'
                 ) : (
@@ -1765,7 +1787,7 @@ function Orders() {
               </button>
             </div>
             
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {modalMode === 'shipping' ? (
                 // Shipping Information Form
                 <form onSubmit={addTracking} className="space-y-6">
@@ -1868,23 +1890,21 @@ function Orders() {
                   </div>
                   
                   {/* Form Actions */}
-                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                  <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-4 sm:flex-row sm:justify-end sm:gap-3">
                     <button
                       type="button"
                       onClick={() => {
                         setIsModalOpen(false);
                         setModalMode('view');
                       }}
-                      className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                      className="w-full rounded-xl bg-gray-200 px-6 py-2.5 font-medium text-gray-800 transition-colors hover:bg-gray-300 sm:w-auto"
                       disabled={processingAction}
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
-                               disabled:opacity-50 disabled:cursor-not-allowed transition-colors
-                               flex items-center gap-2"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                       disabled={processingAction}
                     >
                       {processingAction ? (
@@ -2033,35 +2053,44 @@ function Orders() {
                     <h4 className="font-semibold text-gray-800 mb-3">
                       Order Items ({selectedOrder.items?.length || 0})
                     </h4>
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
-                      <div className="grid grid-cols-5 gap-4 p-3 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-200">
+                    <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                      <div className="hidden grid-cols-5 gap-4 border-b border-gray-200 bg-gray-100 p-3 text-xs font-semibold uppercase tracking-wide text-gray-600 sm:grid">
                         <div className="col-span-2">Product</div>
                         <div>Price</div>
                         <div>Quantity</div>
-                        <div>Total</div>
+                        <div className="text-right">Total</div>
                       </div>
-                      
+
                       <div className="divide-y divide-gray-200">
                         {selectedOrder.items?.map((item, index) => (
-                          <div key={index} className="grid grid-cols-5 gap-4 p-3 items-center text-sm">
-                            <div className="col-span-2 flex items-center gap-3">
+                          <div key={index} className="grid grid-cols-1 gap-2.5 p-3 text-sm sm:grid-cols-5 sm:items-center sm:gap-4">
+                            <div className="flex items-center gap-3 sm:col-span-2">
                               {item.image && (
-                                <img 
-                                  src={item.image} 
-                                  alt={item.name} 
-                                  className="w-12 h-12 object-cover border border-gray-200 rounded"
+                                <img
+                                  src={item.image}
+                                  alt={item.name}
+                                  className="h-14 w-14 shrink-0 rounded-lg border border-gray-200 bg-white object-cover"
                                 />
                               )}
-                              <div>
-                                <div className="font-medium text-gray-800">{item.name}</div>
+                              <div className="min-w-0">
+                                <div className="font-semibold text-gray-800">{item.name}</div>
                                 {getItemOptionLabel(item) && (
-                                  <div className="text-xs text-gray-500 mt-0.5">{getItemOptionLabel(item)}</div>
+                                  <div className="mt-0.5 text-xs text-gray-500">{getItemOptionLabel(item)}</div>
                                 )}
                               </div>
                             </div>
-                            <div className="text-gray-600">{formatCurrency(item.price)}</div>
-                            <div className="text-gray-600">×{item.quantity}</div>
-                            <div className="font-medium text-gray-800">{formatCurrency(item.price * item.quantity)}</div>
+                            <div className="flex items-center justify-between sm:block">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 sm:hidden">Price</span>
+                              <span className="text-gray-600">{formatCurrency(item.price, 0)}</span>
+                            </div>
+                            <div className="flex items-center justify-between sm:block">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 sm:hidden">Qty</span>
+                              <span className="text-gray-600">×{item.quantity}</span>
+                            </div>
+                            <div className="flex items-center justify-between sm:block sm:text-right">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 sm:hidden">Total</span>
+                              <span className="font-semibold text-gray-900">{formatCurrency(item.price * item.quantity, 0)}</span>
+                            </div>
                           </div>
                         )) || (
                           <div className="p-6 text-center text-gray-500">
