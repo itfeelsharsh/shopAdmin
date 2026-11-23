@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db, getAppCheckToken } from '../firebase';
 
 /**
@@ -19,80 +19,21 @@ const getApiFunctionBaseUrl = () => {
 export const sendBroadcastNotification = async (notificationData) => {
   try {
     console.log('📢 NotificationService: Sending broadcast notification:', notificationData);
-    
-    // 1. Fetch all reachable FCM tokens.
-    // Each source is independent: one denied/broken collection must not block
-    // the whole campaign (for example guest tokens vs registered users).
-    const tokens = [];
-    const sourceFailures = [];
 
-    const [usersResult, guestsResult] = await Promise.allSettled([
-      (async () => {
-        const usersSnapshot = await getDocs(
-          query(collection(db, 'users'), where('notificationsEnabled', '==', true))
-        );
-        const collected = [];
-        usersSnapshot.forEach((userDoc) => {
-          const userData = userDoc.data();
-          if (Array.isArray(userData.fcmTokens)) {
-            collected.push(...userData.fcmTokens.filter(Boolean));
-          }
-        });
-        return collected;
-      })(),
-      (async () => {
-        const guestSnapshot = await getDocs(collection(db, 'fcmTokens'));
-        const collected = [];
-        guestSnapshot.forEach((guestDoc) => {
-          const data = guestDoc.data();
-          if (data.notificationsEnabled !== false && data.token) {
-            collected.push(data.token);
-          }
-        });
-        return collected;
-      })(),
-    ]);
-
-    if (usersResult.status === 'fulfilled') {
-      tokens.push(...usersResult.value);
-    } else {
-      sourceFailures.push(`registered users (${usersResult.reason?.code || usersResult.reason?.message || 'unknown'})`);
-      console.warn('📢 NotificationService: Could not read registered users:', usersResult.reason);
-    }
-
-    if (guestsResult.status === 'fulfilled') {
-      tokens.push(...guestsResult.value);
-    } else {
-      sourceFailures.push(`guest devices (${guestsResult.reason?.code || guestsResult.reason?.message || 'unknown'})`);
-      console.warn('📢 NotificationService: Could not read guest tokens:', guestsResult.reason);
-    }
-
-    if (tokens.length === 0) {
-      if (sourceFailures.length === 2) {
-        throw new Error(
-          `Unable to read notification recipients. Firestore denied both token sources: ${sourceFailures.join(', ')}. Deploy the latest Firestore rules.`
-        );
-      }
-      console.log('📢 NotificationService: No tokens found to notify');
-      return { success: true, message: 'No users to notify', result: { count: 0 } };
-    }
-
-    // Remove duplicates
-    const uniqueTokens = [...new Set(tokens.filter(Boolean))];
-    console.log(`📢 NotificationService: Sending to ${uniqueTokens.length} unique tokens`);
-
-    // 2. Call the backend API to send the messages
+    // The backend owns audience discovery (registered users + guest devices).
+    // The admin browser never downloads FCM tokens, so campaigns cannot fail
+    // because of client-side Firestore read rules or query limits.
     const apiEndpoint = `${getApiFunctionBaseUrl()}/send-notification`;
-    const appCheckToken = await getAppCheckToken();
     const headers = { 'Content-Type': 'application/json' };
+    const appCheckToken = await getAppCheckToken();
     if (appCheckToken) {
       headers['X-Firebase-AppCheck'] = appCheckToken;
     }
+
     const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        tokens: uniqueTokens,
         notification: {
           title: notificationData.title,
           body: notificationData.body,
@@ -105,8 +46,14 @@ export const sendBroadcastNotification = async (notificationData) => {
       }),
     });
 
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error?.message || 'Failed to send notification');
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(result.error?.message || result.error || `Failed to send notification (${response.status})`);
+    }
+
+    if (result?.count === 0 || result?.message === 'No users to notify') {
+      return { success: true, message: 'No users to notify', result };
+    }
 
     return { success: true, result };
   } catch (error) {
