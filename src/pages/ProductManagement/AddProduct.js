@@ -11,7 +11,7 @@ import { Button, Card, Input, Alert, Badge } from "../../components/ui";
 import { toast } from "react-toastify";
 import { processFileItem, uploadToCDN } from "../../utils/uploadHelper";
 import ProductOptionsEditor from "../../components/ProductOptionsEditor";
-import { normalizeOptions } from "../../utils/productOptions";
+import { normalizeOptions, balanceOptionDeltas } from "../../utils/productOptions";
 import { rememberProductContext } from "../../utils/optionCatalog";
 
 const productTypes = [
@@ -464,7 +464,7 @@ const AddProduct = () => {
           features: Array.isArray(p.features) ? p.features : prev.features,
           specifications: Array.isArray(p.specifications) ? p.specifications : prev.specifications,
           options: Array.isArray(p.options) && p.options.length > 0
-            ? normalizeOptions(p.options)
+            ? balanceOptionDeltas(p.options)
             : prev.options,
           warranty: p.warranty ? {
             available: !!p.warranty.available,
