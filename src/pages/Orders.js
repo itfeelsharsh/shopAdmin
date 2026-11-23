@@ -2075,7 +2075,10 @@ function Orders() {
                               <div className="min-w-0">
                                 <div className="font-semibold text-gray-800">{item.name}</div>
                                 {getItemOptionLabel(item) && (
-                                  <div className="mt-0.5 text-xs text-gray-500">{getItemOptionLabel(item)}</div>
+                                  <div className="mt-0.5 text-xs text-gray-500">
+                                    {getItemOptionLabel(item)}
+                                    {Number(item.optionPriceDelta) > 0 ? ` · +${formatCurrency(item.optionPriceDelta, 0)}` : ''}
+                                  </div>
                                 )}
                               </div>
                             </div>
