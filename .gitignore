@@ -24,3 +24,6 @@ yarn-error.log*
 .env
 .dev.vars
 .wrangler/
+
+# Public client config must come from Cloudflare Pages env vars, never committed
+.env.production

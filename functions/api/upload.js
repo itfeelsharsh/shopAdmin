@@ -52,15 +52,17 @@ export async function onRequest(context) {
     const cdnDomain = env.CDN_DOMAIN || env.REACT_APP_CDN_DOMAIN || "cdn.kamikoto.click";
 
     if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
+      const missing = [
+        !accountId && "CLOUDFLARE_ACCOUNT_ID",
+        !accessKeyId && "R2_ACCESS_KEY_ID",
+        !secretAccessKey && "R2_SECRET_ACCESS_KEY",
+        !bucketName && "R2_BUCKET_NAME"
+      ].filter(Boolean);
+
       return new Response(
         JSON.stringify({
-          error: "Cloudflare R2 is not fully configured on the server.",
-          missing: {
-            accountId: !accountId,
-            accessKeyId: !accessKeyId,
-            secretAccessKey: !secretAccessKey,
-            bucketName: !bucketName
-          }
+          error: `Cloudflare R2 is not fully configured on the server (missing: ${missing.join(", ")}).`,
+          missing
         }),
         { status: 500, headers: getCORSHeaders(request) }
       );
