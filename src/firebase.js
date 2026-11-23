@@ -4,14 +4,19 @@ import { initializeFirestore } from "firebase/firestore";
 import { getMessaging } from "firebase/messaging";
 import { initializeAppCheck, ReCaptchaV3Provider, getToken } from "firebase/app-check";
 
-// Firebase configuration using environment variables only
+// Firebase configuration: runtime config from /api/firebase-config first,
+// then build-time env as a fallback. No keys are committed to the repository.
+const runtimeConfig = typeof window !== 'undefined' && window.__FIREBASE_CONFIG__
+  ? window.__FIREBASE_CONFIG__
+  : {};
+
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  apiKey: runtimeConfig.apiKey || process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: runtimeConfig.authDomain || process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: runtimeConfig.projectId || process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: runtimeConfig.storageBucket || process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: runtimeConfig.messagingSenderId || process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: runtimeConfig.appId || process.env.REACT_APP_FIREBASE_APP_ID,
 };
 
 // Log configuration status for debugging

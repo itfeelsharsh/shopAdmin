@@ -137,6 +137,12 @@ export async function onRequest(context) {
     return next();
   }
 
+  // The public Firebase web config is required before App Check can initialize.
+  // It contains browser identifiers only (no secrets).
+  if (url.pathname === '/api/firebase-config') {
+    return next();
+  }
+
   // Retrieve project configuration (defaulting to known project config if env keys are not present)
   const projectId = env.FIREBASE_PROJECT_ID || env.REACT_APP_FIREBASE_PROJECT_ID || 'kamikoto-shop';
   const projectNumber = env.FIREBASE_PROJECT_NUMBER || '90397336474';
