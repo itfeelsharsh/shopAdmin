@@ -710,6 +710,7 @@ const EditProduct = () => {
           className="space-y-6"
         >
           <Card title="Pricing Information" icon={<DollarSign className="w-5 h-5 text-green-600" />}>
+            <p className="mb-4 text-xs font-medium text-gray-500">All prices are in Indian Rupees (₹). AI-generated pricing is normalized to INR.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Input
                 label="MRP (Maximum Retail Price)"

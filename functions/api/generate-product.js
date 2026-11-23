@@ -9,6 +9,78 @@ function getCORSHeaders(request) {
   };
 }
 
+/**
+ * AI models sometimes answer with US-dollar pricing even when asked for INR.
+ * Normalise every generated price to whole Indian Rupees before it reaches the
+ * admin form. Explicit $ / USD values are converted; plain numbers are treated
+ * as INR as instructed by the prompt.
+ */
+function parseMoney(value) {
+  if (value === null || value === undefined || value === "") {
+    return { amount: null, currency: null };
+  }
+
+  if (typeof value === "number") {
+    return { amount: Number.isFinite(value) ? value : null, currency: null };
+  }
+
+  const raw = String(value).trim();
+  const lower = raw.toLowerCase();
+  const currency = raw.includes("$") || lower.includes("usd")
+    ? "USD"
+    : raw.includes("₹") || lower.includes("inr")
+      ? "INR"
+      : null;
+
+  const cleaned = raw
+    .replace(/[₹$,\s]/g, "")
+    .replace(/usd/gi, "")
+    .replace(/inr/gi, "")
+    .trim();
+
+  const amount = Number.parseFloat(cleaned);
+  return { amount: Number.isFinite(amount) ? amount : null, currency };
+}
+
+function normalizeAiPricing(product, env) {
+  if (!product || typeof product !== "object") return product;
+
+  const rate = Number(env.USD_TO_INR || 83) || 83;
+  const selling = parseMoney(product.sellingPrice ?? product.price);
+  const mrp = parseMoney(product.mrp ?? product.sellingPrice ?? product.price);
+
+  const declaredCurrency = String(product.currency || product.priceCurrency || "").toUpperCase();
+  const usesUsd =
+    declaredCurrency === "USD" ||
+    selling.currency === "USD" ||
+    mrp.currency === "USD";
+
+  const convert = (amount) => {
+    if (amount === null) return null;
+    const value = usesUsd ? amount * rate : amount;
+    return Math.max(1, Math.round(value));
+  };
+
+  const sellingPrice = convert(selling.amount);
+  const mrpValue = convert(mrp.amount);
+
+  if (sellingPrice !== null) {
+    product.sellingPrice = sellingPrice;
+    product.price = sellingPrice;
+
+    if (mrpValue !== null) {
+      // Never show a fake negative discount.
+      product.mrp = Math.max(sellingPrice, mrpValue);
+    } else {
+      product.mrp = sellingPrice;
+    }
+  }
+
+  product.currency = "INR";
+  delete product.priceCurrency;
+  return product;
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -87,9 +159,12 @@ export async function onRequest(context) {
 
 ${modeInstructions}
 
-Generate reasonable pricing suggestions in INR (₹):
-- MRP should be a standard retail price.
-- sellingPrice should be a realistic discounted price.
+Generate reasonable pricing suggestions STRICTLY in Indian Rupees (INR):
+- Every monetary field MUST be a whole number in INR, with no currency symbols, no commas and no decimals.
+- NEVER use US dollars. NEVER return values such as 199 for a premium imported product just because its US price is $199.
+- Think like an Indian retailer: MRP is the standard Indian retail price and sellingPrice is a realistic Indian discounted price.
+- Typical scale: everyday accessories ₹299–₹2,999; premium stationery ₹499–₹9,999; phones/laptops ₹15,000–₹2,50,000; luxury watches/bags ₹50,000–₹10,00,000.
+- If the product is imported, still quote the Indian landed retail price in INR.
 
 Generate a random stock quantity between 1 and 999.
 Generate a realistic country of origin (e.g., India, Japan, Germany, USA, etc.).
@@ -107,8 +182,9 @@ Schema:
   "brand": "Suggested Brand name",
   "category": "Suggested Category name",
   "description": "Engaging description (3-4 sentences)",
-  "sellingPrice": 199.00,
-  "mrp": 249.00,
+  "sellingPrice": 1499,
+  "mrp": 1999,
+  "currency": "INR",
   "tags": ["tag1", "tag2", "tag3"],
   "features": ["Key feature 1", "Key feature 2", "Key feature 3"],
   "specifications": [
@@ -187,7 +263,7 @@ Schema:
       }
 
       try {
-        productDetails = JSON.parse(generatedText.trim());
+        productDetails = normalizeAiPricing(JSON.parse(generatedText.trim()), env);
       } catch (parseError) {
         console.error("[AI Generator] Failed to parse generated JSON from Grok:", generatedText);
         return new Response(
@@ -266,7 +342,7 @@ Schema:
               return new Response(JSON.stringify({ error: 'Failed to generate content from xAI response structure', raw: xaiData }), { status: 500, headers: getCORSHeaders(request) });
             }
             try {
-              productDetails = JSON.parse(generatedText.trim());
+              productDetails = normalizeAiPricing(JSON.parse(generatedText.trim()), env);
               return new Response(JSON.stringify({ success: true, product: productDetails }), { status: 200, headers: getCORSHeaders(request) });
             } catch (parseError) {
               console.error('[AI Generator] Failed to parse xAI JSON:', generatedText);
@@ -320,7 +396,7 @@ Schema:
                 return new Response(JSON.stringify({ error: 'Failed to generate content from Grok response structure', raw: xaiData }), { status: 500, headers: getCORSHeaders(request) });
               }
               try {
-                productDetails = JSON.parse(generatedText.trim());
+                productDetails = normalizeAiPricing(JSON.parse(generatedText.trim()), env);
                 return new Response(JSON.stringify({ success: true, product: productDetails }), { status: 200, headers: getCORSHeaders(request) });
               } catch (parseError) {
                 console.error('[AI Generator] Failed to parse Grok JSON:', generatedText);
@@ -377,7 +453,7 @@ Schema:
 
       // Parse the JSON returned by Gemini
       try {
-        productDetails = JSON.parse(generatedText.trim());
+        productDetails = normalizeAiPricing(JSON.parse(generatedText.trim()), env);
       } catch (parseError) {
         console.error("[AI Generator] Failed to parse generated JSON:", generatedText);
         return new Response(
