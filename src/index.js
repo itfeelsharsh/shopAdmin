@@ -10,20 +10,8 @@ root.render(
   <App />
 );
 
-// Register service worker for PWA functionality with active update listener
-serviceWorkerRegistration.register({
-  onUpdate: (registration) => {
-    const waitingServiceWorker = registration.waiting;
-    if (waitingServiceWorker) {
-      waitingServiceWorker.addEventListener('statechange', (event) => {
-        if (event.target.state === 'activated') {
-          console.info('🔄 PWA: New version activated. Reloading page...');
-          window.location.reload();
-        }
-      });
-      waitingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
-    }
-  }
-});
+// The admin console is Cloudflare Access protected and always deploys fresh.
+// Registering a service worker here causes stale bundles after deployments.
+serviceWorkerRegistration.unregister();
 
 reportWebVitals();
