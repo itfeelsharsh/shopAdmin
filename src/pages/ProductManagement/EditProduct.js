@@ -5,18 +5,40 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Package, DollarSign, Image as ImageIcon, Tag, Info, Check,
-  X, Plus, Trash2, Globe, Shield, Save
+  X, Plus, Trash2, Globe, Shield, Save, Sliders
 } from "react-feather";
 import { Button, Card, Input, Alert, Badge, LoadingSpinner } from "../../components/ui";
 import { toast } from "react-toastify";
 import { sendBroadcastNotification } from "../../utils/notificationService";
 import { processFileItem, uploadToCDN } from "../../utils/uploadHelper";
+import ProductOptionsEditor from "../../components/ProductOptionsEditor";
+import { getCategoryOptionPresets, normalizeOptions } from "../../utils/productOptions";
 
 const productTypes = [
-  'Notebooks and Journals', 'Pens and Pencils', 'Paper and Notepads',
-  'Planners and Calendars', 'Office Supplies', 'Art Supplies',
-  'Desk Accessories', 'Cards and Envelopes', 'Writing Accessories',
+  'Notebooks and Journals',
+  'Pens and Pencils',
+  'Paper and Notepads',
+  'Planners and Calendars',
+  'Office Supplies',
+  'Art Supplies',
+  'Desk Accessories',
+  'Cards and Envelopes',
+  'Writing Accessories',
   'Gift Wrap and Packaging',
+  'Bicycles',
+  'Bike Accessories',
+  'Fitness Equipment',
+  'Electronics',
+  'Audio',
+  'Apparel and Footwear',
+  'Home and Kitchen',
+  'Beauty and Personal Care',
+  'Toys and Games',
+  'Musical Instruments',
+  'Bags and Luggage',
+  'Jewellery and Watches',
+  'Health and Wellness',
+  'Automotive',
 ];
 
 const brands = [
@@ -154,6 +176,24 @@ const EditProduct = () => {
     } finally {
       setIsCreatingBrandSubmitting(false);
     }
+  };
+
+  const handleCategoryChange = (value) => {
+    setProduct((prev) => {
+      if (!prev) return prev;
+      const previousPresets = normalizeOptions(getCategoryOptionPresets(prev.type));
+      const nextPresets = normalizeOptions(getCategoryOptionPresets(value));
+      const currentOptions = normalizeOptions(prev.options);
+      const optionsUntouched =
+        currentOptions.length === 0 ||
+        JSON.stringify(currentOptions) === JSON.stringify(previousPresets);
+
+      return {
+        ...prev,
+        type: value,
+        options: optionsUntouched && nextPresets.length > 0 ? nextPresets : prev.options,
+      };
+    });
   };
 
   const handleDrag = (e) => {
@@ -305,6 +345,7 @@ const EditProduct = () => {
     { id: 'pricing', label: 'Pricing', icon: DollarSign },
     { id: 'images', label: 'Images', icon: ImageIcon },
     { id: 'details', label: 'Details', icon: Info },
+    { id: 'options', label: 'Options', icon: Sliders },
     { id: 'warranty', label: 'Warranty', icon: Shield }
   ];
 
@@ -328,6 +369,7 @@ const EditProduct = () => {
           tags: productData.tags || [],
           features: productData.features || [],
           specifications: productData.specifications || [],
+          options: normalizeOptions(productData.options),
           origin: productData.origin || "",
           warranty: productData.warranty || { available: false, period: "", details: "" },
           guarantee: productData.guarantee || { available: false, period: "", details: "" },
@@ -370,6 +412,7 @@ const EditProduct = () => {
         mrp: Number(product.mrp || product.price),
         price: Number(product.sellingPrice || product.price),
         stock: Number(product.stock),
+        options: normalizeOptions(product.options),
         updatedAt: new Date()
       };
 
@@ -591,7 +634,7 @@ const EditProduct = () => {
                 <div className="flex gap-2">
                   <select
                     value={product.type}
-                    onChange={(e) => setProduct({ ...product, type: e.target.value })}
+                    onChange={(e) => handleCategoryChange(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select Category</option>
@@ -1043,6 +1086,28 @@ const EditProduct = () => {
 
           <div className="flex justify-between">
             <Button onClick={() => setActiveTab('images')} variant="outline">Back</Button>
+            <Button onClick={() => setActiveTab('options')} icon={<Sliders className="w-4 h-4" />} iconPosition="right">
+              Next: Options
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Options Tab */}
+      {activeTab === 'options' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <ProductOptionsEditor
+            options={product.options}
+            category={product.type}
+            onChange={(options) => setProduct((prev) => ({ ...prev, options }))}
+          />
+
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('details')} variant="outline">Back</Button>
             <Button onClick={() => setActiveTab('warranty')} icon={<Shield className="w-4 h-4" />} iconPosition="right">
               Next: Warranty
             </Button>
@@ -1198,7 +1263,7 @@ const EditProduct = () => {
           </Card>
 
           <div className="flex justify-between">
-            <Button onClick={() => setActiveTab('details')} variant="outline">Back</Button>
+            <Button onClick={() => setActiveTab('options')} variant="outline">Back</Button>
             <Button
               onClick={handleUpdateProduct}
               variant="success"

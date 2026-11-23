@@ -5,11 +5,13 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Package, DollarSign, Image as ImageIcon, Tag, Info, Check,
-  X, Plus, Trash2, Globe, Shield, Cpu
+  X, Plus, Trash2, Globe, Shield, Cpu, Sliders
 } from "react-feather";
 import { Button, Card, Input, Alert, Badge } from "../../components/ui";
 import { toast } from "react-toastify";
 import { processFileItem, uploadToCDN } from "../../utils/uploadHelper";
+import ProductOptionsEditor from "../../components/ProductOptionsEditor";
+import { getCategoryOptionPresets, normalizeOptions } from "../../utils/productOptions";
 
 const productTypes = [
   'Notebooks and Journals',
@@ -22,6 +24,20 @@ const productTypes = [
   'Cards and Envelopes',
   'Writing Accessories',
   'Gift Wrap and Packaging',
+  'Bicycles',
+  'Bike Accessories',
+  'Fitness Equipment',
+  'Electronics',
+  'Audio',
+  'Apparel and Footwear',
+  'Home and Kitchen',
+  'Beauty and Personal Care',
+  'Toys and Games',
+  'Musical Instruments',
+  'Bags and Luggage',
+  'Jewellery and Watches',
+  'Health and Wellness',
+  'Automotive',
 ];
 
 const brands = [
@@ -33,7 +49,7 @@ const brands = [
 const loadingPhases = [
   "Analyzing product details...",
   "Drafting description & key features...",
-  "Generating specifications & tags...",
+  "Generating specifications, options & tags...",
   "Mapping category & warranty details...",
   "Suggesting retail & selling prices...",
   "Populating your listing form..."
@@ -66,7 +82,8 @@ const AddProduct = () => {
     guarantee: { available: false, period: "", details: "" },
     importDetails: { isImported: false, country: "", deliveryNote: "" },
     specifications: [],
-    features: []
+    features: [],
+    options: []
   });
 
   const [tagInput, setTagInput] = useState("");
@@ -95,6 +112,8 @@ const AddProduct = () => {
 
   // Generation mode: 'professional' or 'meme'
   const [generationMode, setGenerationMode] = useState("professional");
+  // AI model selection: 'gemini_new' | 'gemini_old' | 'xai'
+  const [aiModelChoice, setAiModelChoice] = useState('gemini_new');
 
   useEffect(() => {
     // Fetch dynamic brands and categories from settings docs
@@ -156,6 +175,28 @@ const AddProduct = () => {
     } finally {
       setIsCreatingBrandSubmitting(false);
     }
+  };
+
+  /**
+   * Category changes automatically seed category-specific options the first
+   * time, so a bicycle listing immediately offers frame/wheel sizes.
+   * Custom options the admin has already edited are never overwritten.
+   */
+  const handleCategoryChange = (value) => {
+    setNewProduct((prev) => {
+      const previousPresets = normalizeOptions(getCategoryOptionPresets(prev.type));
+      const nextPresets = normalizeOptions(getCategoryOptionPresets(value));
+      const currentOptions = normalizeOptions(prev.options);
+      const optionsUntouched =
+        currentOptions.length === 0 ||
+        JSON.stringify(currentOptions) === JSON.stringify(previousPresets);
+
+      return {
+        ...prev,
+        type: value,
+        options: optionsUntouched && nextPresets.length > 0 ? nextPresets : prev.options,
+      };
+    });
   };
 
   const handleCreateCategory = async () => {
@@ -369,8 +410,9 @@ const AddProduct = () => {
         headers,
         body: JSON.stringify({
           name: newProduct.name,
-          imageUrl: newProduct.image, // use primary image if uploaded
-          mode: generationMode
+          // Do not send imageUrl: generation should be from title only
+          mode: generationMode,
+          modelChoice: aiModelChoice
         })
       });
 
@@ -452,6 +494,11 @@ const AddProduct = () => {
           tags: Array.isArray(p.tags) ? p.tags : prev.tags,
           features: Array.isArray(p.features) ? p.features : prev.features,
           specifications: Array.isArray(p.specifications) ? p.specifications : prev.specifications,
+          options: Array.isArray(p.options) && p.options.length > 0
+            ? normalizeOptions(p.options)
+            : (prev.options && prev.options.length > 0
+                ? prev.options
+                : normalizeOptions(getCategoryOptionPresets(matchedCategory || prev.type))),
           warranty: p.warranty ? {
             available: !!p.warranty.available,
             period: p.warranty.period || "",
@@ -494,6 +541,7 @@ const AddProduct = () => {
     { id: 'pricing', label: 'Pricing', icon: DollarSign },
     { id: 'images', label: 'Images', icon: ImageIcon },
     { id: 'details', label: 'Details', icon: Info },
+    { id: 'options', label: 'Options', icon: Sliders },
     { id: 'warranty', label: 'Warranty', icon: Shield }
   ];
 
@@ -572,6 +620,7 @@ const AddProduct = () => {
         mrp: Number(newProduct.mrp || newProduct.price),
         price: Number(newProduct.sellingPrice || newProduct.price),
         stock: Number(newProduct.stock),
+        options: normalizeOptions(newProduct.options),
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -775,7 +824,10 @@ const AddProduct = () => {
 
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-200">
                 <div className="text-xs text-slate-400 font-semibold">
-                  Powered by Gemini 3.5 Flash API
+                  {generationMode === 'meme' ? 'Style: Meme — Model:' : 'Style: Professional — Model:'}
+                  <span className="ml-2 font-mono text-xs">{
+                    aiModelChoice === 'gemini_new' ? 'Gemini (newer fast)' : aiModelChoice === 'gemini_old' ? 'Gemini (older fast)' : 'xAI (fastest/cheapest)'
+                  }</span>
                 </div>
                 <Button
                   type="button"
@@ -786,6 +838,26 @@ const AddProduct = () => {
                 >
                   Generate Listing
                 </Button>
+              </div>
+
+              {/* Model selector */}
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-slate-700">AI Model</label>
+                <div className="mt-1 flex items-center gap-3">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="aiModel" value="gemini_new" checked={aiModelChoice==='gemini_new'} onChange={()=>setAiModelChoice('gemini_new')} />
+                    <span className="text-xs">Gemini (newer, fast)</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="aiModel" value="gemini_old" checked={aiModelChoice==='gemini_old'} onChange={()=>setAiModelChoice('gemini_old')} />
+                    <span className="text-xs">Gemini (older, still fast)</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="aiModel" value="xai" checked={aiModelChoice==='xai'} onChange={()=>setAiModelChoice('xai')} />
+                    <span className="text-xs">xAI (fastest, cheapest)</span>
+                  </label>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Image analysis disabled — generation uses title only.</p>
               </div>
 
               {aiLoading && currentPhase && (
@@ -872,7 +944,7 @@ const AddProduct = () => {
                 <div className="flex gap-2">
                   <select
                     value={newProduct.type}
-                    onChange={(e) => setNewProduct({ ...newProduct, type: e.target.value })}
+                    onChange={(e) => handleCategoryChange(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select Category</option>
@@ -1394,6 +1466,30 @@ const AddProduct = () => {
             <Button onClick={() => setActiveTab('images')} variant="outline">
               Back
             </Button>
+            <Button onClick={() => setActiveTab('options')} icon={<Sliders className="w-4 h-4" />} iconPosition="right">
+              Next: Options
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Options Tab */}
+      {activeTab === 'options' && (
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <ProductOptionsEditor
+            options={newProduct.options}
+            category={newProduct.type}
+            onChange={(options) => setNewProduct((prev) => ({ ...prev, options }))}
+          />
+
+          <div className="flex justify-between">
+            <Button onClick={() => setActiveTab('details')} variant="outline">
+              Back
+            </Button>
             <Button onClick={() => setActiveTab('warranty')} icon={<Shield className="w-4 h-4" />} iconPosition="right">
               Next: Warranty
             </Button>
@@ -1555,7 +1651,7 @@ const AddProduct = () => {
           </Card>
 
           <div className="flex justify-between">
-            <Button onClick={() => setActiveTab('details')} variant="outline">
+            <Button onClick={() => setActiveTab('options')} variant="outline">
               Back
             </Button>
             <Button

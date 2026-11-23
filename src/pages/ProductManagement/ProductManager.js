@@ -171,7 +171,11 @@ const ProductManager = () => {
       filtered = filtered.filter(product =>
         product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.type?.toLowerCase().includes(searchTerm.toLowerCase())
+        product.type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.options?.some((group) =>
+          group?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          group?.values?.some((value) => String(value).toLowerCase().includes(searchTerm.toLowerCase()))
+        )
       );
     }
 
@@ -827,7 +831,14 @@ const ProductManager = () => {
                     <h3 className="font-bold text-gray-900 truncate" title={product.name}>
                       {product.name}
                     </h3>
-                    <p className="text-sm text-gray-500 truncate">{product.brand} • {product.type}</p>
+                    <p className="text-sm text-gray-500 truncate">
+                      {product.brand} • {product.type}
+                      {Array.isArray(product.options) && product.options.length > 0 && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                          {product.options.length} option{product.options.length > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </p>
                   </div>
 
                   {/* Metrics Grid */}

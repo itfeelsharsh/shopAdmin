@@ -35,6 +35,7 @@ import AdminOrderService, {
 import { resendOrderConfirmationEmail, sendOrderStatusEmail } from "../utils/emailService";
 import { sendUserNotification } from "../utils/notificationService";
 import { formatCurrency, formatIndianNumber } from '../utils/formatUtils';
+import { getItemOptionLabel } from '../utils/productOptions';
 
 /**
  * Main Orders Management Component
@@ -2053,6 +2054,9 @@ function Orders() {
                               )}
                               <div>
                                 <div className="font-medium text-gray-800">{item.name}</div>
+                                {getItemOptionLabel(item) && (
+                                  <div className="text-xs text-gray-500 mt-0.5">{getItemOptionLabel(item)}</div>
+                                )}
                               </div>
                             </div>
                             <div className="text-gray-600">{formatCurrency(item.price)}</div>
