@@ -32,6 +32,24 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>KamiKoto Admin</title>
+    <script>
+      // The admin console is Access-protected. Never let an old PWA service
+      // worker serve a stale bundle after a deployment.
+      (function () {
+        try {
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (reg) { reg.unregister(); });
+            });
+          }
+          if (window.caches && caches.keys) {
+            caches.keys().then(function (keys) {
+              keys.forEach(function (key) { caches.delete(key); });
+            });
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
