@@ -375,6 +375,17 @@ Schema:
           }
         }
 
+        // Then try the configured older Gemini model before leaving the provider.
+        if ((response.status === 503 || !response.ok) && env.GEMINI_OLD_MODEL && apiKey && env.GEMINI_OLD_MODEL !== chosenModel.model) {
+          try {
+            const oldUrl = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_OLD_MODEL}:generateContent`;
+            response = await callGemini(oldUrl, apiKey);
+            console.log('[AI Generator] Called older Gemini model:', env.GEMINI_OLD_MODEL);
+          } catch (oldErr) {
+            console.error('[AI Generator] Older Gemini model failed:', oldErr.message || oldErr);
+          }
+        }
+
         // If still 503 or no fallback, try Grok/XAI if key present
         if ((response.status === 503 || !response.ok) && (env.XAI_API_KEY || env.GROK_API_KEY)) {
           try {
