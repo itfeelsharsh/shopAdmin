@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, collection, getDocs } from "firebase/firestore";
 import { db, getAppCheckToken } from "../../firebase";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -114,9 +114,19 @@ const AddProduct = () => {
 
         const categoriesRef = doc(db, "settings", "categories");
         const categoriesSnap = await getDoc(categoriesRef);
+        let savedCategories = [];
         if (categoriesSnap.exists() && categoriesSnap.data().categories) {
-          setDynamicCategories(categoriesSnap.data().categories);
+          savedCategories = categoriesSnap.data().categories;
         }
+
+        // Auto-generate the category list from the existing catalogue as well,
+        // so newly used types always appear in the dropdowns.
+        const productsSnap = await getDocs(collection(db, "products"));
+        const existingTypes = productsSnap.docs.map((entry) => entry.data()?.type).filter(Boolean);
+        const existingBrands = productsSnap.docs.map((entry) => entry.data()?.brand).filter(Boolean);
+
+        setDynamicCategories([...new Set([...savedCategories, ...existingTypes])]);
+        setDynamicBrands((prev) => [...new Set([...(prev || []), ...existingBrands])]);
       } catch (err) {
         console.error("Error fetching dynamic settings:", err);
       }
